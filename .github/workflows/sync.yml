@@ -6,7 +6,7 @@ name: sync
 # 再重建 web/data.js 索引，一并提交回仓库。
 on:
   schedule:
-    - cron: '0 0 * * *'          # 每日 00:00 UTC = Asia/Shanghai 08:00
+    - cron: '1 0 * * *'          # 每日 00:00 UTC = Asia/Shanghai 09:00
   workflow_dispatch:
     inputs:
       repo:
@@ -23,12 +23,12 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
-          cache: false
+          node-version: 24
+          package-manager-cache: false # Disable automatic npm caching if not required
 
       - name: 同步清单
         run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict
