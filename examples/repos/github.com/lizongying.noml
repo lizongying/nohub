@@ -1,0 +1,9 @@
+; nohub 作者收录记录 —— 路径即身份
+; 位置：repos/github.com/lizongying.noml
+;
+; 内容是 noml 数组，元素为仓库短名；只有 GitHub 登录账号为 lizongying 的人
+; 才能创建 / 修改 / 删除本文件。元素也可写成对象，用于覆盖单个仓库的缺省配置。
+[
+  'nolang',
+  'notools',
+]

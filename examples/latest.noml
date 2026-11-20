@@ -1,0 +1,12 @@
+; nohub 最新版本指针（仓库根目录 latest.noml）
+;
+; 全局一份，noml 数组。每个元素是一条「包:版本@托管主机/作者/仓库」规格，
+; 与 no 的依赖写法 key:version@host/owner/repo 一致。
+;
+; 版本是同步时取到的仓库最新 tag（如 v0.4.28）；同步后原子改写本文件，
+; 旧版本快照目录保留。
+[
+  'glossary:v0.4.28@github.com/lizongying/nolang'
+  'nogit:v0.1.35@github.com/lizongying/notools'
+  'noimg:v0.1.35@github.com/lizongying/notools'
+]

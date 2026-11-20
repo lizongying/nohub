@@ -4,6 +4,10 @@
 
 nohub 是一个面向社区第三方库的**元数据注册中心（metadata registry）**。它不托管任何源码，源码始终留在各自的独立仓库中；nohub 只负责收录、索引、准入审核，并对外提供搜索、预览与文档入口。
 
+nohub 同时也是**一套 registry 规范 + 一个参考实现**：规范定义 noml 格式与同步/索引/搜索/安装协议，参考实现部署在 `lizongying/nohub` 作为公共实例。任何人都可以自建结构一致的私有实例，`no` 客户端把多个实例作为源叠加搜索与安装。
+
+完整的格式规范见 [`docs/noml-format.md`](docs/noml-format.md)，样例见 [`examples/`](examples/)。
+
 ---
 
 ## 核心定位
@@ -13,7 +17,7 @@ nohub 解决的是「社区包发现难、来源散、质量不可控」的问�
 具体来说，nohub 只做四件事：
 
 1. **包清单索引与元数据 registry** —— 以 `noml` 清单为基本单元，为每个收录的包建立可检索的元数据记录。
-2. **社区收录入口与版本解析** —— 提供统一的提交入口，并按 git tag 规则解析版本，把包与它的源码仓库、标签一一对应起来。
+2. **社区收录入口与版本解析** —— 用户提交一个 GitHub repo，nohub 自动同步该 repo 的 `workspace.noml` 与 `package.noml`，按 git tag 规则解析版本，并按仓库版本留存清单快照。
 3. **搜索、预览与文档入口** —— 让用户能按名称、关键词、分类找到包，并跳转到源码仓库与文档。
 4. **准入审核** —— 所有收录都经过准入流程，保证索引里的每条记录都指向真实、可解析、符合规范的仓库。
 
@@ -25,131 +29,167 @@ nohub **不做**的事同样重要：不存放全部源码、不镜像仓库、�
 
 ```mermaid
 flowchart LR
-    A[社区仓库\n独立 repo] -->|提交收录| B[收录入口\nSubmission]
-    B --> C[准入审核\nAdmission]
-    C -->|通过| D[noml 清单\nManifest]
-    D --> E[元数据 Registry\n索引]
-    E --> F[搜索 Search]
-    E --> G[预览 Preview]
-    E --> H[文档入口 Docs]
-    A -->|git tag| D
+    A[社区仓库\n独立 repo] -->|作者登录提交| B[收录入口]
+    B --> C{作者校验}
+    C -->|通过| R[(作者记录\nrepos/host/owner.noml)]
+    R -->|Actions 即时 + 每日| W[workspace.noml]
+    R -->|Actions 即时 + 每日| P[package.noml]
+    W --> SN[(版本快照\nworkspaces/ packages/)]
+    P --> SN
+    SN --> I[(元数据 Registry\n索引)]
+    I --> F[搜索 Search]
+    I --> G[预览 Preview]
+    I --> H[文档入口 Docs]
     F --> A
     G --> A
     H --> A
 ```
 
-数据流很轻：社区仓库通过收录入口提交一份 `noml` 清单，准入审核通过后进入元数据 registry，之后搜索、预览、文档入口都从 registry 读取，并回跳到原始仓库。源码本身从不经过 nohub。
+数据流很轻：用户提交一个 GitHub repo，准入通过后生成收录记录；同步任务（CRUD 后即时触发，外加每日兜底）按记录拉取该 repo 的 `workspace.noml` 与各个 `package.noml`，解析、校验后写入版本快照与索引；搜索、预览、文档入口都从索引读取，并回跳原始仓库。源码本身从不经过 nohub。
 
 ---
 
-## noml 清单
+## 实例与多源
 
-`noml` 是 nohub 的清单格式，每个收录的包对应一份 `noml` 文件。它描述「这个包是什么、源码在哪、版本怎么对应到 git tag」，是 registry 索引的唯一数据来源。
+nohub 不是唯一的官方单点。规范约束的是**结构与协议**，不是部署位置。
 
-一份最小可用的 `noml` 清单包含以下字段：
+- **公共实例**：参考实现部署在 `lizongying/nohub`，是默认的公共源。
+- **自建实例**：任何人随时可以 clone 参考实现、指向自己的 `repos/` 部署私有实例，目录结构与公共实例完全一致。
+- **实例隔离**：权限、审核、包可见性由每个实例自己管控；实例之间不互相同步作者记录或索引，也不共享用户与权限。A 实例的私有包不会出现在 B 实例。
+- **多源客户端**：`no` 客户端维护一个源列表，每个源指向一个 nohub 实例；搜索与安装时叠加所有源，结果带来源实例，按源优先级或显式指定解析。包引用沿用 `<pkg>@<host>/<owner>/<repo>`。
 
-```toml
-# noml 清单示例
-[package]
-name        = "example-lib"
-version     = "0.1.0"
-description = "一个示例社区库"
-repository  = "https://github.com/someone/example-lib"
-license     = "MIT"
-keywords    = ["example", "demo"]
-category    = "utilities"
+同一个 `repos/<host>/<owner>.noml` 可以同时存在于公共实例和某个私有实例，两者互不相干；作者在不同实例上是各自独立的收录记录。
 
-[sources]
-# 源码始终在独立 repo，这里只记录地址
-git = "https://github.com/someone/example-lib.git"
+---
 
-[versions]
-# 版本号 -> git tag 的解析规则
-tag_prefix = "v"
-tag_pattern = "v{version}"
+## 三类 noml 文件
 
-[meta]
-submitted_by = "someone"
-submitted_at = "2026-11-20"
+nohub 复用 Nolang 工具链（`no`）的 noml 格式，仓库里的 `workspace.noml` / `package.noml` 与 `no build` 读的是同一份文件。
+
+| 文件 | 位置 | 谁写 / 谁读 | 作用 |
+| --- | --- | --- | --- |
+| `workspace.noml` | 仓库根目录 | 社区仓库 / `no`、nohub | 登记包名 → 仓库相对路径（纯字符串映射） |
+| `package.noml` | 每个包目录 | 社区仓库 / `no`、nohub | 包元数据与编译选项 |
+| `repos/<host>/<owner>.noml` | nohub `repos/` 下 | **仅作者本人** / nohub | 作者收录记录，驱动同步 |
+
+`workspace.noml` 长这样（纯字符串映射，不能放对象值，否则 `no build` 会报错）：
+
+```noml
+{
+  glossary: '/glossary'
+  noui: '/noui'
+  test1: '/example/test1'
+}
 ```
 
-字段约定：
+`package.noml` 同时被 `no` 与 nohub 读取，nohub 的扩展字段（`category`、`docs`、`tag_pattern` 等）是 `no` 的未知键，会被 `no` 忽略：
 
-| 字段 | 说明 |
-| --- | --- |
-| `package.name` | 包名，registry 中的唯一标识 |
-| `package.version` | 当前收录版本，遵循语义化版本 |
-| `package.repository` | 源码仓库地址，必须是可访问的独立 repo |
-| `package.license` | 许可证标识（SPDX） |
-| `package.keywords` / `category` | 用于搜索与分类 |
-| `sources.git` | 源码 git 地址，与 `repository` 保持一致 |
-| `versions.tag_prefix` / `tag_pattern` | 版本号到 git tag 的解析规则 |
-| `meta.*` | 收录元信息，用于审核与追溯 |
+```noml
+{
+  name: 'glossary'
+  version: 'v0.1.0'
+  description: 'Nolang 词条化知识库…'
+  keywords: ['nolang', 'glossary', 'mcp', 'knowledge-base']
+  repository: 'https://github.com/lizongying/nolang'
+  license: 'Apache-2.0'
 
-清单本身也应存放在提交它的仓库中（通常位于仓库根目录），nohub 只保存索引所需的元数据，不复制清单全文。
+  ; ── nohub 扩展（no 忽略）──
+  category: 'knowledge-base'
+  docs: ''
+  tag_pattern: 'v{version}'
+  publish: true
 
----
-
-## 收录流程与准入审核
-
-社区第三方库的收录走一条统一入口，任何人都可以提交，但必须通过准入审核：
-
-```mermaid
-sequenceDiagram
-    participant C as 贡献者
-    participant S as 收录入口
-    participant R as 审核
-    participant G as Registry
-
-    C->>S: 提交 noml 清单 + 仓库地址
-    S->>S: 校验清单格式与字段完整性
-    S->>R: 发起准入审核
-    R->>R: 检查仓库可访问、tag 可解析、license 合规
-    alt 通过
-        R->>G: 写入索引
-        G-->>C: 收录成功
-    else 驳回
-        R-->>C: 返回驳回原因
-    end
+  ; ── no 编译选项 ──
+  compiler: {
+    version: 'v0.4.19'
+    link-libs: []
+  }
+  output: './dist'
+}
 ```
 
-准入审核至少覆盖以下几点：
+作者记录按「一路径一作者」组织：`repos/github.com/lizongying.noml` 的路径即身份，内容是该作者名下仓库的 noml 数组。只有 GitHub 登录账号为 `lizongying` 的人，才能创建、修改、删除这份文件：
 
-- **仓库真实性**：`repository` 指向的地址可访问，且是独立 repo。
-- **清单一致性**：`noml` 字段完整、版本号合法、`repository` 与 `sources.git` 一致。
-- **版本可解析**：按 `tag_pattern` 能从仓库解析出对应 git tag。
-- **许可证合规**：`license` 是有效的 SPDX 标识，且仓库中存在对应许可证文件。
-- **无重复收录**：包名在 registry 中唯一，避免冲突与混淆。
+```noml
+[
+  'nolang',
+  'notools',
+  {
+    name: 'nohub'
+    branch: 'main'
+    workspace: '/workspace.noml'
+    sync: {
+      schedule: 'daily'
+      timezone: 'Asia/Shanghai'
+    }
+  },
+]
+```
 
-被驳回的提交会附带明确原因，贡献者修正后可重新提交。
+元素 `<name>` 对应仓库 `https://<host>/<owner>/<name>`；字符串元素全部用缺省配置，对象元素可覆盖 `branch` / `workspace` / `sync`。字段细节、作者校验与兼容性约束见 [`docs/noml-format.md`](docs/noml-format.md)。
 
 ---
 
-## 版本标签解析规则
+## 收录、作者授权与每日同步
 
-版本与 git tag 的对应沿用既有的 git tag 依赖设计，规则由 `noml` 清单中的 `versions` 段声明：
+开发者用 GitHub 账号登录后提交自己名下的仓库。nohub 先做作者校验：登录 login 必须等于路径里的 `<owner>`，且对每个仓库有 push 权限；通过后写入 `repos/<host>/<owner>.noml`，并**立即触发一次同步**，不必等每日任务。
 
-- `tag_prefix`：tag 前缀，例如 `v`，表示版本 `0.1.0` 对应 tag `v0.1.0`。
-- `tag_pattern`：完整的 tag 模板，用 `{version}` 占位，例如 `v{version}` 或 `release-{version}`。
+同步有两个触发源：作者每次创建 / 修改 / 删除作者记录后即时触发，以及每日定时兜底。触发与执行都由 **GitHub Actions** 完成（`.github/workflows/sync.yml`），不需要常驻服务：工作流监听 `repos/**` 的 `push`，跑同步程序拉取上游清单、回写快照与 `latest.noml` 并提交。任务对每个 `active` 仓库：
 
-解析流程：
+1. 由 `<host>/<owner>/<name>` 推导仓库地址，用 `git ls-remote` 拿到全部 ref 与默认分支。
+2. 解析出**仓库版本**（最新语义化 tag，无 tag 时为分支 HEAD 短 SHA），作为快照目录名。
+3. 拉取 `workspace.noml`；若不存在，回退到根目录的 `package.noml`（单包仓库）。
+4. 遍历 `workspace.noml` 的键值，逐个拉取 `package.noml`。
+5. **逐包**校验字段与版本标签；写入版本快照、包级 `latest.noml` 与根 `latest.noml`，并把同步状态记入 `state/sync.noml`。
 
-1. 读取清单中的 `package.version` 与 `versions.tag_pattern`。
-2. 将 `{version}` 替换为版本号，得到预期 tag 名。
-3. 在源码仓库中确认该 tag 存在。
-4. 校验通过后，把「版本号 ↔ tag ↔ commit」的对应关系写入 registry。
+同步幂等：内容未变时不重写文件，只刷新同步时间。校验以包为单位做隔离——单个包不合法只跳过它自己，同仓库其他包照常入库，该仓库标记为 `partial`；一个包都没通过才整仓 `error`。仓库之间也互不影响，失败原因与告警都记入 `state/sync.noml`。
 
-当仓库新增 tag 时，贡献者更新 `package.version` 并重新提交清单，registry 据此更新索引。nohub 不主动拉取仓库，版本更新由提交触发。
+参考实现的同步逻辑在 `lib/sync.mjs`，命令行入口是 `bin/nohub.mjs`：
+
+```bash
+node bin/nohub.mjs sync                    # 全量同步
+node bin/nohub.mjs sync github.com/o/r     # 只同步一个仓库（增量，不清理）
+node bin/nohub.mjs sync --dry-run          # 只报告，不写盘
+node bin/nohub.mjs sync --strict           # 有失败或部分成功时以非零码退出
+node bin/nohub.mjs sync --root <dir>       # 指向另一个实例仓库
+```
+
+同步产出按**仓库版本**留存为不可变快照，路径与索引记录一一对应：
+
+```
+workspaces/<host>/<owner>/<repo>/<version>/workspace.noml
+packages/<pkg>/<host>/<owner>/<repo>/<version>/package.noml
+packages/<pkg>/<host>/<owner>/<repo>/latest.noml
+latest.noml
+state/sync.noml
+```
+
+`<version>` 是同步时取到的仓库最新 tag（如 `v0.4.28`），无 tag 时退化为分支 HEAD 短 SHA。`latest.noml` 分两层：根目录一份是全局版本指针，数组元素形如 `'glossary:v0.4.28@github.com/lizongying/nolang'`；`packages/<pkg>/<host>/<owner>/<repo>/latest.noml` 是包级指针 `{ version, commit }`，供索引构建读取。`state/sync.noml` 记录每个仓库的上次同步时间、状态、跳过的包与告警。删除作者记录里的仓库时，对应快照与两层 `latest.noml` 一并清理。
+
+**只有作者能创建、修改、删除自己的收录记录**：作者身份只看 GitHub 登录账号，不看 `package.noml` 里可随意填写的 `author` 字段。他人提交 PR 也会在合并前被同一套校验拦下。同步状态与包索引由 nohub 内部维护，不回写作者文件。
+
+---
+
+## 版本标签解析
+
+版本与 git tag 的对应沿用既有的 git tag 依赖设计，由 `package.noml` 的 `version` 与可选的 `tag_prefix` / `tag_pattern` 决定：
+
+1. 取 `version`；**该字段允许缺省**，缺省时用同步解析出的仓库版本兜底。
+2. 有 `tag_pattern` 时把 `{version}` 替换为版本号；否则有 `tag_prefix` 时拼成 `tag_prefix + version`；否则 tag 直接等于 `version`。
+3. 用 `git ls-remote` 确认 tag 存在并取得 commit SHA。
+4. 把「版本 ↔ tag ↔ commit」写入索引。
+
+tag 无法解析只告警、不拒绝写入：只有显式声明了 `tag_pattern` / `tag_prefix` 才要求命中的 tag 真实存在。仓库新增 tag 后，贡献者更新 `version` 并推送，同步会把新版本写进索引。
 
 ---
 
 ## 搜索、预览与文档入口
 
-registry 对外提供三个只读入口，均基于索引数据，不涉及源码托管：
+索引对外提供三个只读入口，均基于元数据，不涉及源码托管：
 
-- **搜索**：按包名、关键词、分类检索已收录的包，返回包名、描述、当前版本、仓库地址。
-- **预览**：展示包的元数据摘要（名称、版本、许可证、关键词、提交者、收录时间），并给出源码仓库与文档的跳转链接。
-- **文档入口**：直接指向仓库中的文档文件或外部文档站点，nohub 不缓存、不渲染文档内容。
+- **搜索**：按包名、关键词、分类检索，返回包名、描述、当前版本、仓库地址。
+- **预览**：展示包的元数据摘要（名称、版本、许可证、关键词、作者、收录时间），并给出源码仓库与文档的跳转链接。
+- **文档入口**：优先取 `docs`，回退 `homepage`，再回退 `repository`；nohub 不缓存、不渲染文档内容。
 
 三个入口的共同原则是「**指向而非托管**」：用户从 nohub 找到包，再跳转到它真正的仓库与文档。
 
@@ -162,7 +202,8 @@ nohub 与源码仓库是**索引与被索引**的关系，边界清晰：
 | 关注点 | nohub | 源码仓库 |
 | --- | --- | --- |
 | 源码 | 不存放 | 完整存放 |
-| 版本历史 | 只记录 tag 对应关系 | 完整维护 |
+| 版本历史 | 只记录 tag ↔ commit | 完整维护 |
+| 清单快照 | 按仓库版本留存 | 随源码版本化 |
 | 构建 / CI | 不参与 | 自行负责 |
 | 包元数据 | 索引与检索 | 以 `noml` 清单声明 |
 | 文档内容 | 只提供入口 | 实际承载 |
@@ -173,59 +214,37 @@ nohub 与源码仓库是**索引与被索引**的关系，边界清晰：
 
 ## 快速开始
 
-提交一个社区库到 nohub：
+提交一个社区仓库到 nohub：
 
 ```bash
-# 1. 在你的仓库根目录创建 noml 清单
-cat > noml.toml <<'EOF'
-[package]
-name        = "your-lib"
-version     = "0.1.0"
-description = "你的库"
-repository  = "https://github.com/you/your-lib"
-license     = "MIT"
-keywords    = ["your", "keywords"]
-category    = "utilities"
+# 1. 确认仓库根有 workspace.noml（多包）或 package.noml（单包）
+#    多包仓库：workspace.noml 登记包名 -> 相对路径
+#    每个包目录：package.noml 声明 name/version/repository/...
 
-[sources]
-git = "https://github.com/you/your-lib.git"
+# 2. 通过收录入口提交 GitHub repo 地址
+#    入口会生成 repos/<host>/<owner>.noml 并发起作者校验与准入审核
 
-[versions]
-tag_prefix  = "v"
-tag_pattern = "v{version}"
-EOF
-
-# 2. 打上与清单一致的 tag
-git tag v0.1.0
-git push origin v0.1.0
-
-# 3. 通过收录入口提交（仓库地址 + 清单）
-#    等待准入审核通过即完成收录
+# 3. 审核通过后立即触发同步，拉取清单、写入版本快照与索引（每日任务兜底）
 ```
 
 用户在 nohub 上搜索、预览、跳转到文档：
 
 ```bash
-# 搜索
-nohub search your-lib
-
-# 预览元数据
-nohub info your-lib
-
-# 打开文档入口
-nohub docs your-lib
+nohub search glossary
+nohub info glossary
+nohub docs glossary
 ```
 
 ---
 
 ## 贡献指南
 
-欢迎提交社区库，也欢迎改进 nohub 本身。提交库时请确保：清单字段完整、仓库公开可访问、tag 与版本号一致、许可证合规。提交前建议先本地校验清单格式，并确认 `tag_pattern` 能解析到实际存在的 tag。
+欢迎提交社区仓库，也欢迎改进 nohub 本身。提交前请确保：仓库公开可访问、`workspace.noml` 是纯字符串映射、每个包的 `package.noml` 字段完整且 `name` 与 workspace 键一致、写了 `version` 就要是语义化版本（不写则自动取仓库 tag）、许可证合规。清单需能被 `no fmt` 解析。
 
-审核反馈会附带具体原因，按提示修正后重新提交即可。若对收录规则、清单字段或版本解析有疑问或改进建议，欢迎在 issue 中讨论。
+单个包不合法时 nohub 只跳过该包并告警，同仓库其他包照常收录，仓库标记为 `partial`；请在收到告警后尽快修正。审核反馈会附带具体原因，在仓库里修正后重新触发同步即可。若对格式、收录规则或同步策略有疑问，欢迎在 issue 中讨论。
 
 ---
 
 ## 许可证
 
-nohub 项目本身的许可证见仓库根目录 `LICENSE` 文件。收录的社区包各自遵循其 `noml` 清单中声明的许可证。
+nohub 项目本身的许可证见仓库根目录 `LICENSE` 文件。收录的社区包各自遵循其 `package.noml` 中声明的许可证。

@@ -1,0 +1,13 @@
+; nohub 工作区清单（仓库根目录）
+;
+; 键：包短名，必须与目标目录里 package.noml 的 name 一致。
+; 值：仓库相对路径，以 / 开头，指向含 package.noml 的目录。
+;
+; no 工具链读同一份文件（`no build` 会按这里列出的路径构建），
+; 因此本文件只能是「字符串 → 字符串」的纯映射，不能放对象或元数据。
+{
+  glossary: '/glossary'
+  noui: '/noui'
+  test1: '/example/test1'
+  test2: '/example/test2'
+}

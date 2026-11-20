@@ -1,0 +1,39 @@
+{
+  'github.com/lizongying/nolang': {
+    last_sync_at: '2026-11-20T13:56:29.160Z'
+    last_sync_status: 'ok'
+    last_sync_error: nil
+    repo_version: 'v0.4.28'
+    commit: '49ab71ed60ae719418f2351986be71748fa843fe'
+    branch: 'main'
+    packages: [
+      'test1',
+      'test2',
+      'test',
+      'glossary',
+    ]
+    skipped: []
+    warnings: [
+      'test1: 缺少 license',
+    ]
+  }
+  'github.com/lizongying/notools': {
+    last_sync_at: '2026-11-20T13:56:29.160Z'
+    last_sync_status: 'ok'
+    last_sync_error: nil
+    repo_version: 'v0.1.35'
+    commit: 'b0716f55c2ab23e52f4899a90f77d8dfcd2b298e'
+    branch: 'main'
+    packages: [
+      'noagent',
+      'nogit',
+      'noimg',
+      'nojq',
+      'nonpm',
+      'notools',
+      'nouv',
+    ]
+    skipped: []
+    warnings: []
+  }
+}

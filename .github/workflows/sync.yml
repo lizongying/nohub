@@ -1,0 +1,46 @@
+name: sync
+
+# nohub 同步工作流：作者记录（repos/**）变更后即时触发，每日定时兜底。
+# 同步程序 `node bin/nohub.mjs sync` 拉取上游仓库的 workspace.noml / package.noml，
+# 写入 workspaces/ packages/ 快照、根目录 latest.noml 与 state/sync.noml，
+# 再重建 web/data.js 索引，一并提交回仓库。
+on:
+  schedule:
+    - cron: '0 0 * * *'          # 每日 00:00 UTC = Asia/Shanghai 08:00
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '只同步 host/owner/repo，留空则全量'
+        required: false
+  push:
+    branches: [main]
+    paths: ['repos/**']
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: false
+
+      - name: 同步清单
+        run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict
+
+      - name: 重建索引
+        run: node web/build.mjs
+
+      - name: 回写快照
+        run: |
+          git add workspaces packages latest.noml state web/data.js
+          git diff --cached --quiet && exit 0
+          git -c user.name='nohub-bot' \
+              -c user.email='nohub-bot@users.noreply.github.com' \
+              commit -m 'sync: update manifests'
+          git push
