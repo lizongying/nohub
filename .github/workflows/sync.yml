@@ -44,3 +44,18 @@ jobs:
               -c user.email='nohub-bot@users.noreply.github.com' \
               commit -m 'sync: update manifests'
           git push
+
+      # 搜索页部署在 gh-pages 分支，同步后一并更新，保持线上页面与索引一致。
+      - name: 同步搜索页（gh-pages）
+        continue-on-error: true
+        run: |
+          set -e
+          git checkout gh-pages
+          git rm -rf -q . || true
+          for f in index.html app.js styles.css data.js; do git show main:web/$f > $f; done
+          git add -A
+          git diff --cached --quiet && exit 0
+          git -c user.name='nohub-bot' \
+              -c user.email='nohub-bot@users.noreply.github.com' \
+              commit -m 'pages: sync web'
+          git push origin gh-pages
