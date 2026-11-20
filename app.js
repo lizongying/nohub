@@ -246,6 +246,20 @@
       ' <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></a>';
   }
 
+  // 源码仓库地址：优先用构建期规范化过的 repoUrl，缺失时做运行时兜底
+  function repoUrlOf(p) {
+    if (p.repoUrl) return p.repoUrl;
+    var s = String(p.repository || '').trim();
+    var m = s.match(/^git@([^:\s]+):(.+)$/);
+    if (m) return 'https://' + m[1] + '/' + m[2].replace(/\.git\/?$/i, '').replace(/\/+$/, '');
+    m = s.match(/^ssh:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/i);
+    if (m) return 'https://' + m[1] + '/' + m[2].replace(/\.git\/?$/i, '').replace(/\/+$/, '');
+    if (s && !/^[a-z][a-z0-9+.-]*:\/\//i.test(s) && /^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(s)) {
+      return 'https://' + s;
+    }
+    return s;
+  }
+
   function renderDetail() {
     var p = state.selected;
     if (!p) {
@@ -305,7 +319,7 @@
           (p.description ? '<p class="detail-desc">' + highlight(p.description, tokens) + '</p>' : '') +
         '</div>' +
         '<div class="detail-links">' +
-          linkIf(p.repository, '源码仓库') +
+          linkIf(repoUrlOf(p), '源码仓库') +
           linkIf(p.docsUrl, docsLabel, true) +
           (p.homepage && p.homepage !== p.docsUrl ? linkIf(p.homepage, '主页', true) : '') +
         '</div>' +
