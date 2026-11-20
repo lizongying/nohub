@@ -441,6 +441,32 @@ mark {
 }
 .link-btn.ghost:hover { background: #e9ebf3; }
 
+/* 复制命令按钮 */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.copy-btn.copied {
+  border-color: #16a34a;
+  color: #16a34a;
+  background: #ecfdf5;
+}
+
 .detail-body { padding: 6px 22px 18px; }
 .detail-section { padding: 14px 0 4px; }
 .detail-section + .detail-section { border-top: 1px solid #f0f1f6; }
