@@ -6,7 +6,7 @@ name: sync
 # 再重建 web/data.js 索引，一并提交回仓库。
 on:
   schedule:
-    - cron: '1 0 * * *'          # 每日 00:00 UTC = Asia/Shanghai 09:00
+    - cron: '1 0 * * *'          # 每日 00:01 UTC = Asia/Shanghai 08:01
   workflow_dispatch:
     inputs:
       repo:
@@ -50,9 +50,13 @@ jobs:
         continue-on-error: true
         run: |
           set -e
-          git checkout gh-pages
+          # checkout 默认只浅抓 main 一个分支，gh-pages 要显式取回；
+          # 同时先记下 main 的 SHA，切分支后才仍取得到 web/ 源文件。
+          SRC=$(git rev-parse HEAD)
+          git fetch --depth 1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages
+          git checkout -B gh-pages origin/gh-pages
           git rm -rf -q . || true
-          for f in index.html app.js styles.css data.js; do git show main:web/$f > $f; done
+          for f in index.html app.js styles.css data.js; do git show "$SRC:web/$f" > "$f"; done
           git add -A
           git diff --cached --quiet && exit 0
           git -c user.name='nohub-bot' \
