@@ -10,11 +10,12 @@
   var INDEX = window.NOHUB_INDEX || { packages: [], generatedAt: '', source: '' };
   var PKGS = INDEX.packages || [];
 
-  // ---------- 按仓库分组（同一仓库的多个版本快照） ----------
+  // ---------- 按包分组（同名同仓库的多个版本快照归为一组） ----------
   var GROUPS = {};
   PKGS.forEach(function (p) {
-    var k = p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
-    if (!GROUPS[k]) GROUPS[k] = { repoKey: k, name: p.name, versions: [] };
+    var repoKey = p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
+    var k = p.name + '@' + repoKey;
+    if (!GROUPS[k]) GROUPS[k] = { key: k, repoKey: repoKey, name: p.name, versions: [] };
     GROUPS[k].versions.push(p);
   });
   Object.keys(GROUPS).forEach(function (k) {
@@ -24,14 +25,17 @@
     GROUPS[k].default = GROUPS[k].versions[0];
   });
   var GROUP_LIST = Object.keys(GROUPS).map(function (k) { return GROUPS[k]; })
-    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+    .sort(function (a, b) {
+      var byName = a.name.localeCompare(b.name);
+      return byName !== 0 ? byName : a.repoKey.localeCompare(b.repoKey);
+    });
 
   var state = {
     q: '',
     category: '全部',
     activeIdx: -1, // 键盘导航聚焦项
     selected: null, // 当前详情展示的版本记录
-    repoKey: null, // 当前详情所属仓库
+    groupKey: null, // 当前详情所属的包分组
   };
 
   var $ = function (sel) { return document.querySelector(sel); };
@@ -154,9 +158,14 @@
 
   // ---------- 渲染：头部统计 / 分类 ----------
   function renderHeader() {
+    var repos = {};
+    PKGS.forEach(function (p) {
+      var k = p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
+      repos[k] = true;
+    });
     headerStats.innerHTML =
-      '<span class="stat-pill"><b>' + GROUP_LIST.length + '</b> 个包</span>' +
-      '<span class="stat-pill"><b>' + GROUP_LIST.length + '</b> 个仓库</span>';
+      '<span class="stat-pill"><b>' + PKGS.length + '</b> 个包</span>' +
+      '<span class="stat-pill"><b>' + Object.keys(repos).length + '</b> 个仓库</span>';
     footerSource.textContent = '数据快照生成于 ' + fmtTime(INDEX.generatedAt);
   }
 
@@ -270,8 +279,8 @@
       return '<span class="tag">' + highlight(k, tokens) + '</span>';
     }).join('');
 
-    // 版本列表（同一仓库的全部快照版本，可点击进入）
-    var group = GROUPS[state.repoKey];
+    // 版本列表（同一包的全部快照版本，可点击进入）
+    var group = GROUPS[state.groupKey];
     var versions = group ? group.versions : [p];
     var verChips = versions.map(function (v) {
       var active = v.repoVersion === p.repoVersion;
@@ -374,7 +383,7 @@
 
   function closeDetail() {
     state.selected = null;
-    state.repoKey = null;
+    state.groupKey = null;
     detailPane.classList.remove('open');
     ensureBackdrop().classList.remove('show');
     renderDetail();
@@ -383,7 +392,8 @@
 
   function selectPackage(pkg) {
     state.selected = pkg;
-    state.repoKey = pkg.repoKey || (pkg.host + '/' + pkg.owner + '/' + pkg.repo);
+    var repoKey = pkg.repoKey || (pkg.host + '/' + pkg.owner + '/' + pkg.repo);
+    state.groupKey = pkg.name + '@' + repoKey;
     renderDetail();
     if (isMobileDetail()) {
       var card = detailPane.querySelector('.detail-card');
@@ -419,7 +429,7 @@
   detailPane.addEventListener('click', function (e) {
     var chip = e.target.closest('.ver-chip');
     if (!chip) return;
-    var group = GROUPS[state.repoKey];
+    var group = GROUPS[state.groupKey];
     if (!group) return;
     var ver = chip.getAttribute('data-ver');
     var rec = group.versions.filter(function (v) { return v.repoVersion === ver; })[0];
