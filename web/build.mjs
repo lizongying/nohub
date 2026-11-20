@@ -164,7 +164,25 @@ function resolveTag(pkg, version) {
 
 /** docs 回退链：docs -> homepage -> repository */
 function resolveDocs(pkg) {
-  return pkg.docs || pkg.homepage || pkg.repository || '';
+  return pkg.docs || pkg.homepage || normalizeRepoUrl(pkg.repository) || '';
+}
+
+/** 把 git 克隆地址（git@ / ssh:// / 裸域名）统一成可点击的 https 页面地址 */
+function normalizeRepoUrl(url) {
+  if (!url) return '';
+  const s = String(url).trim();
+  if (!s) return '';
+  // git@host:owner/repo.git -> https://host/owner/repo
+  let m = s.match(/^git@([^:\s]+):(.+)$/);
+  if (m) return `https://${m[1]}/${m[2].replace(/\.git\/?$/i, '').replace(/\/+$/, '')}`;
+  // ssh://[git@]host[:port]/owner/repo.git -> https://host/owner/repo
+  m = s.match(/^ssh:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/i);
+  if (m) return `https://${m[1]}/${m[2].replace(/\.git\/?$/i, '').replace(/\/+$/, '')}`;
+  // 裸域名 github.com/owner/repo -> https://github.com/owner/repo
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s) && /^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(s)) {
+    return `https://${s}`;
+  }
+  return s.replace(/\.git\/?$/i, '');
 }
 
 /** 语义化版本比较（容忍 v 前缀与不同段数），降序排列用 */
@@ -212,6 +230,7 @@ function buildIndex() {
       email: pkg.email ?? '',
       organization: pkg.organization ?? '',
       repository: pkg.repository ?? '',
+      repoUrl: normalizeRepoUrl(pkg.repository),
       homepage: pkg.homepage ?? '',
       license: pkg.license ?? '',
       dependencies: Array.isArray(pkg.dependencies) ? pkg.dependencies.filter((d) => typeof d === 'string') : [],
