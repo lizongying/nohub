@@ -260,6 +260,48 @@
     return s;
   }
 
+  // 包引用：name:repoVersion@host/owner/repo
+  function pkgRef(p) {
+    return p.name + ':' + p.repoVersion + '@' + p.host + '/' + p.owner + '/' + p.repo;
+  }
+
+  // 复制命令按钮（点击写入剪贴板）
+  function copyBtn(cmd, label) {
+    return '<button class="copy-btn" type="button" data-cmd="' + escapeHtml(cmd) + '">' +
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
+      escapeHtml(label) + '</button>';
+  }
+
+  function legacyCopy(text) {
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy') ? resolve() : reject(new Error('copy failed'));
+      } catch (e) {
+        reject(e);
+      }
+      document.body.removeChild(ta);
+    });
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      // 剪贴板 API 不可用（如 file://、权限不足）时退回 execCommand
+      return navigator.clipboard.writeText(text).catch(function () {
+        return legacyCopy(text);
+      });
+    }
+    return legacyCopy(text);
+  }
+
   function renderDetail() {
     var p = state.selected;
     if (!p) {
@@ -322,6 +364,8 @@
           linkIf(repoUrlOf(p), '源码仓库') +
           linkIf(p.docsUrl, docsLabel, true) +
           (p.homepage && p.homepage !== p.docsUrl ? linkIf(p.homepage, '主页', true) : '') +
+          copyBtn('no install ' + pkgRef(p), '安装可执行文件') +
+          copyBtn('no add ' + pkgRef(p), '导入包') +
         '</div>' +
         '<div class="detail-body">' +
           '<div class="detail-section">' +
@@ -439,8 +483,27 @@
     if (g) selectPackage(g.default);
   });
 
-  // 版本切换（事件委托，详情重渲染后依然有效）
+  // 版本切换 / 复制命令（事件委托，详情重渲染后依然有效）
   detailPane.addEventListener('click', function (e) {
+    var btn = e.target.closest('.copy-btn');
+    if (btn) {
+      var cmd = btn.getAttribute('data-cmd') || '';
+      var original = btn.innerHTML;
+      copyText(cmd).then(function () {
+        btn.classList.add('copied');
+        btn.textContent = '已复制';
+        setTimeout(function () {
+          btn.classList.remove('copied');
+          btn.innerHTML = original;
+        }, 1400);
+      }).catch(function () {
+        btn.textContent = '复制失败';
+        setTimeout(function () {
+          btn.innerHTML = original;
+        }, 1400);
+      });
+      return;
+    }
     var chip = e.target.closest('.ver-chip');
     if (!chip) return;
     var group = GROUPS[state.groupKey];
