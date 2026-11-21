@@ -1,7 +1,7 @@
 // 由 web/build.mjs 自动生成，请勿手动修改。
 // 重新生成：node web/build.mjs
 window.NOHUB_INDEX = {
-  "generatedAt": "2026-11-21T08:19:11.012Z",
+  "generatedAt": "2026-11-21T08:22:13.239Z",
   "source": "nohub packages/ 目录快照",
   "count": 11,
   "packages": [
