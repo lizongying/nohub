@@ -363,11 +363,11 @@
               kvRow('仓库', repoUrlOf(p)
                 ? '<a class="inline-link" href="' + escapeHtml(repoUrlOf(p)) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(repoUrlOf(p)) + '</a>'
                 : '') +
-              '<dt>关键词</dt><dd><div class="pkg-tags" style="margin:0">' + (keywords || emptyDep) + '</div></dd>' +
-              kvRow('分类', escapeHtml(p.category || '')) +
               kvRow('主页', p.homepage
                 ? '<a class="inline-link" href="' + escapeHtml(p.homepage) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(p.homepage) + '</a>'
                 : '') +
+              '<dt>关键词</dt><dd><div class="pkg-tags" style="margin:0">' + (keywords || emptyDep) + '</div></dd>' +
+              kvRow('分类', escapeHtml(p.category || '')) +
               kvRow('许可证', escapeHtml(p.license || '')) +
               kvRow('发布状态', p.publish ? '已发布' : '未发布') +
             '</dl>' +
