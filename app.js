@@ -10,6 +10,9 @@
   var INDEX = window.NOHUB_INDEX || { packages: [], generatedAt: '', source: '' };
   var PKGS = INDEX.packages || [];
 
+  // no 运行时一键安装命令（尚未安装 no 时先执行）
+  var NO_INSTALL_CMD = 'curl -fsSL https://raw.githubusercontent.com/lizongying/nolang/main/install.sh | sh';
+
   // ---------- 按包分组（同名同仓库的多个版本快照归为一组） ----------
   var GROUPS = {};
   PKGS.forEach(function (p) {
@@ -354,8 +357,17 @@
           (p.description ? '<p class="detail-desc">' + highlight(p.description, tokens) + '</p>' : '') +
         '</div>' +
         '<div class="detail-links">' +
-          copyBtn('no install ' + pkgRef(p), '安装可执行文件') +
-          copyBtn('no add ' + pkgRef(p), '导入包') +
+          '<div class="install-note">' +
+            '<p class="install-note-text">如果还没有 <code>no</code>，需要先安装：一键安装（macOS / Linux / Windows Git Bash）会自动下载最新的 <code>no</code> 到 <code>$HOME/.local/bin</code>。</p>' +
+            '<div class="install-cmd">' +
+              '<code>' + escapeHtml(NO_INSTALL_CMD) + '</code>' +
+              copyBtn(NO_INSTALL_CMD, '复制') +
+            '</div>' +
+          '</div>' +
+          '<div class="detail-links-btns">' +
+            copyBtn('no install ' + pkgRef(p), '安装可执行文件') +
+            copyBtn('no add ' + pkgRef(p), '导入包') +
+          '</div>' +
         '</div>' +
         '<div class="detail-body">' +
           '<div class="detail-section">' +
