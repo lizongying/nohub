@@ -212,7 +212,6 @@
       if (p.category) badges += '<span class="badge green">' + escapeHtml(p.category) + '</span>';
 
       var verCount = g.versions.length;
-      var verHint = verCount > 1 ? ' · ' + verCount + ' 个版本' : '';
 
       return '<button class="pkg' + (i === state.activeIdx ? ' active' : '') +
         '" type="button" data-idx="' + i + '">' +
@@ -225,7 +224,8 @@
         '<div class="pkg-meta">' +
           '<span>' + escapeHtml(p.host) + '/' + escapeHtml(p.owner) + '/' + escapeHtml(p.repo) + '</span>' +
           (p.license ? '<span class="dot">' + escapeHtml(p.license) + '</span>' : '') +
-          '<span class="dot">' + escapeHtml(p.repoVersion) + ' 快照' + verHint + '</span>' +
+          '<span class="dot">' + (p.publish ? '已发布' : '未发布') + '</span>' +
+          (verCount > 1 ? '<span class="dot">' + verCount + ' 个版本</span>' : '') +
         '</div>' +
       '</button>';
     }).join('');
@@ -356,7 +356,6 @@
           '<div class="detail-badges">' +
             '<span class="badge">' + escapeHtml(p.repoVersion) + '</span>' +
             (p.category ? '<span class="badge green">' + escapeHtml(p.category) + '</span>' : '') +
-            (p.publish ? '' : '<span class="badge gray">未发布</span>') +
           '</div>' +
           (p.description ? '<p class="detail-desc">' + highlight(p.description, tokens) + '</p>' : '') +
         '</div>' +
