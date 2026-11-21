@@ -414,6 +414,10 @@ mark {
   color: var(--text-2);
 }
 
+/* 版本切换：放在详情卡片顶部，点击即可切换快照 */
+.detail-versions { margin-top: 14px; }
+.detail-badges:empty { display: none; }
+
 .detail-links {
   display: flex;
   flex-direction: column;
