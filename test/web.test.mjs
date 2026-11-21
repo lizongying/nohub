@@ -101,14 +101,37 @@ test('web/index.noml 清单存在且与 packages/ 快照一一对应', () => {
   for (const s of manifest.snapshots) {
     assert.ok(fs.existsSync(path.join(ROOT, s.latest)), `${s.latest} 应存在`);
   }
+
+  // 包级 latest.noml 必须是带 versions 索引的对象：version/commit 指向最新，
+  // versions 升序覆盖该包全部有快照的版本（前端据此懒加载历史版本）
+  const latestFiles = new Set(manifest.snapshots.map((s) => s.latest));
+  for (const rel of latestFiles) {
+    const latest = parseNoml(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
+    assert.equal(typeof latest.version, 'string', `${rel} 应有 version`);
+    assert.equal(typeof latest.commit, 'string', `${rel} 应有 commit`);
+    assert.ok(Array.isArray(latest.versions) && latest.versions.length > 0, `${rel} 应有非空 versions`);
+    for (const v of latest.versions) {
+      assert.equal(typeof v.version, 'string', `${rel} 的 versions 项应有 version`);
+      assert.equal(typeof v.commit, 'string', `${rel} 的 versions 项应有 commit`);
+      assert.ok(
+        fs.existsSync(path.join(ROOT, 'packages', rel.split('/')[1], ...rel.split('/').slice(2, -1), v.version, 'package.noml')),
+        `${rel} 的 versions 应指向存在的快照：${v.version}`,
+      );
+    }
+    assert.equal(latest.versions[latest.versions.length - 1].version, latest.version, `${rel} 最新版本应等于 version`);
+  }
 });
 
-test('web/app.js 走 fetch + noml 解析路径', () => {
+test('web/app.js 走 fetch + noml 解析路径（默认只加载最新版本）', () => {
   const app = fs.readFileSync(path.join(ROOT, 'web/app.js'), 'utf8');
   const html = fs.readFileSync(path.join(ROOT, 'web/index.html'), 'utf8');
-  assert.match(app, /fetchText\('index\.noml'\)/, 'app.js 应 fetch 根级 index.noml');
   assert.match(app, /fetchText\('latest\.noml'\)/, 'app.js 应 fetch 根级 latest.noml');
-  assert.match(app, /fetchText\(entry\.snapshot\)/, 'app.js 应按清单 fetch packages 快照');
+  assert.match(app, /fetchText\('index\.noml'\)/, 'app.js 应 fetch 根级 index.noml（生成时间等）');
+  assert.match(app, /fetchText\(item\.latestPath\)/, 'app.js 应按包 fetch latest.noml 版本索引');
+  assert.match(app, /latest\.versions/, 'app.js 应使用 latest.noml 的 versions 索引');
+  assert.match(app, /fetchText\(item\.snapshot\)/, 'app.js 应只加载默认版本的 package.noml');
+  assert.match(app, /fetchText\(rec\.snapshot\)/, 'app.js 应在切换版本时按需 fetch package.noml');
+  assert.match(app, /GROUP_LIST\.length \+ '<\/b> 个包/, '顶部统计应按包分组计数');
   assert.match(app, /NOML\.parse/, 'app.js 应调用 NOML.parse 解析 noml');
   assert.match(html, /<script src="noml\.js"><\/script>/, 'index.html 应引入 noml.js');
   assert.match(html, /<script src="data\.js"><\/script>/, 'index.html 应保留 data.js（本地预览）');

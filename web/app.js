@@ -1,8 +1,10 @@
 /* ============================================================
   nohub 搜索页交互逻辑
   数据来源：
-    - 本地预览：data.js（由 web/build.mjs 从 packages/ 快照预编译）
-    - gh-pages：fetch index.noml 清单，再逐份 fetch package.noml，
+    - 本地预览：data.js（由 web/build.mjs 从 packages/ 快照预编译，含全部版本）
+    - gh-pages：fetch 根级 latest.noml（每个包一条最新指针）→
+                逐包 fetch packages/.../latest.noml（versions 版本索引）→
+                只加载默认版本的 package.noml，切换版本时再按需 fetch，
                 用 noml.js 在浏览器里解析（原始 noml 数据）
   说明：package.noml 的 version 字段与 release 相关，页面不展示；
         版本以快照目录的仓库版本（repoVersion）为准，可切换。
@@ -20,28 +22,54 @@
   var GROUPS = {};
   var GROUP_LIST = [];
 
+  function repoKeyOf(p) {
+    return p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
+  }
+
   function buildGroups() {
     GROUPS = {};
     PKGS.forEach(function (p) {
-      var repoKey = p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
+      var repoKey = repoKeyOf(p);
       var k = p.name + '@' + repoKey;
-      if (!GROUPS[k]) GROUPS[k] = { key: k, repoKey: repoKey, name: p.name, versions: [] };
-      GROUPS[k].versions.push(p);
+      if (!GROUPS[k]) GROUPS[k] = { key: k, repoKey: repoKey, name: p.name, versions: [], records: {} };
+      GROUPS[k].records[p.repoVersion] = p;
     });
+
+    // 包级 latest.noml 的 versions 索引：含尚未加载的历史版本（只带定位信息）
+    var meta = (INDEX && INDEX.versionMeta) || {};
+    Object.keys(meta).forEach(function (k) {
+      var m = meta[k];
+      if (!GROUPS[k]) GROUPS[k] = { key: k, repoKey: m.repoKey, name: m.name, versions: [], records: {} };
+      GROUPS[k].meta = m.versions.map(function (v) {
+        return {
+          repoVersion: v.repoVersion,
+          commit: v.commit || '',
+          snapshot: v.snapshot,
+          entry: GROUPS[k].records[v.repoVersion] || null,
+        };
+      }).sort(function (a, b) {
+        return compareVersions(b.repoVersion, a.repoVersion);
+      });
+    });
+
     var latestKeys = (INDEX && INDEX.latestKeys) || {};
     Object.keys(GROUPS).forEach(function (k) {
       var group = GROUPS[k];
-      group.versions.sort(function (a, b) {
+      // data.js 预览：records 即完整记录；gh-pages：meta 只带定位信息
+      var list = group.meta || Object.keys(group.records).map(function (v) { return group.records[v]; });
+      group.versions = list.slice().sort(function (a, b) {
         return compareVersions(b.repoVersion, a.repoVersion);
       });
       // 默认展示 latest.noml 指向的版本；缺失时取仓库版本最高者
-      var latest = null;
+      var latestVer = null;
       for (var i = 0; i < group.versions.length; i++) {
-        var v = group.versions[i];
-        if (latestKeys[v.name + ':' + v.repoVersion] === group.repoKey) { latest = v; break; }
+        var rv = group.versions[i].repoVersion;
+        if (latestKeys[group.name + ':' + rv] === group.repoKey) { latestVer = rv; break; }
       }
-      group.default = latest || group.versions[0];
+      group.defaultVersion = latestVer || (group.versions[0] && group.versions[0].repoVersion) || null;
+      group.default = (group.defaultVersion && group.records[group.defaultVersion]) || null;
     });
+
     GROUP_LIST = Object.keys(GROUPS).map(function (k) { return GROUPS[k]; })
       .sort(function (a, b) {
         var byName = a.name.localeCompare(b.name);
@@ -143,6 +171,7 @@
     var cat = state.category;
     var list = GROUP_LIST.filter(function (g) {
       var p = g.default;
+      if (!p) return false;
       if (cat !== '全部' && (p.category || '未分类') !== cat) return false;
       if (tokens.length === 0) return true;
       var score = 0;
@@ -165,7 +194,7 @@
   function categories() {
     var map = {};
     GROUP_LIST.forEach(function (g) {
-      var c = g.default.category || '未分类';
+      var c = (g.default && g.default.category) || '未分类';
       map[c] = (map[c] || 0) + 1;
     });
     return Object.keys(map).sort(function (a, b) {
@@ -178,12 +207,9 @@
   // ---------- 渲染：头部统计 / 分类 ----------
   function renderHeader() {
     var repos = {};
-    PKGS.forEach(function (p) {
-      var k = p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
-      repos[k] = true;
-    });
+    GROUP_LIST.forEach(function (g) { repos[g.repoKey] = true; });
     headerStats.innerHTML =
-      '<span class="stat-pill"><b>' + PKGS.length + '</b> 个包</span>' +
+      '<span class="stat-pill"><b>' + GROUP_LIST.length + '</b> 个包</span>' +
       '<span class="stat-pill"><b>' + Object.keys(repos).length + '</b> 个仓库</span>';
     footerSource.textContent = '数据快照生成于 ' + fmtTime(INDEX.generatedAt);
   }
@@ -223,6 +249,7 @@
 
     resultsEl.innerHTML = list.map(function (g, i) {
       var p = g.default;
+      if (!p) return '';
       var keywords = (p.keywords || []).slice(0, 5).map(function (k) {
         return '<span class="tag">' + highlight(k, tokens) + '</span>';
       }).join('');
@@ -539,7 +566,20 @@
     if (!group) return;
     var ver = chip.getAttribute('data-ver');
     var rec = group.versions.filter(function (v) { return v.repoVersion === ver; })[0];
-    if (rec && rec !== state.selected) selectPackage(rec);
+    if (!rec) return;
+    // 本地预览（data.js）：版本项本身就是完整记录
+    var target = rec.entry || (rec.name ? rec : null);
+    if (target) {
+      if (target !== state.selected) selectPackage(target);
+      return;
+    }
+    // gh-pages：历史版本按需 fetch package.noml
+    loadVersion(rec).then(function (record) {
+      selectPackage(record);
+    }).catch(function () {
+      chip.textContent = '加载失败';
+      setTimeout(renderDetail, 1200);
+    });
   });
 
   searchInput.addEventListener('input', onSearch);
@@ -658,44 +698,138 @@
     };
   }
 
+  /** 按需加载某个历史版本的 package.noml，解析成完整记录并缓存 */
+  function loadVersion(rec) {
+    var group = GROUPS[state.groupKey];
+    if (!group) return Promise.reject(new Error('缺少包分组信息'));
+    if (rec.entry) return Promise.resolve(rec.entry);
+    if (rec.loading) return rec.loading;
+    if (!rec.snapshot) return Promise.reject(new Error('缺少快照地址'));
+    var parts = group.repoKey.split('/');
+    var p = fetchText(rec.snapshot).then(function (text) {
+      var pkg = window.NOML.parse(text) || {};
+      var record = recordFrom({
+        name: group.name,
+        version: pkg.version,
+        tag: '',
+        host: parts[0] || '',
+        owner: parts[1] || '',
+        repo: parts[2] || '',
+        repo_version: rec.repoVersion,
+        snapshot: rec.snapshot,
+      }, pkg, { commit: rec.commit || '' });
+      rec.entry = record;
+      group.records[rec.repoVersion] = record;
+      return record;
+    });
+    rec.loading = p;
+    p.then(function () { rec.loading = null; }, function () { rec.loading = null; });
+    return p;
+  }
+
   /**
-   * gh-pages 数据流：
-   *   1. fetch index.noml（版本清单）与 latest.noml（最新指针）
-   *   2. 按清单逐份 fetch packages/.../package.noml 与同级 latest.noml
-   *   3. 用 noml.js 解析成与 data.js 相同结构的索引
+   * gh-pages 数据流（懒加载）：
+   *   1. fetch 根 latest.noml：每个包一条 'name:version@host/owner/repo'
+   *   2. 逐包 fetch packages/<name>/<repoKey>/latest.noml（versions 版本索引）
+   *   3. 只 fetch 默认版本的 package.noml；历史版本点击时再 fetch
+   *   4. 用 noml.js 解析成与 data.js 相同结构的索引
    */
   function loadNomlIndex() {
     if (!window.NOML) return Promise.reject(new Error('noml.js 未加载，无法解析数据'));
     return Promise.all([
-      fetchText('index.noml').then(function (text) { return window.NOML.parse(text); }),
-      fetchText('latest.noml').then(function (text) { return window.NOML.parse(text); })
-        .catch(function () { return []; }),
+      fetchText('latest.noml').then(function (text) { return window.NOML.parse(text); }),
+      // 仅取 generated_at 等元信息；快照清单由包级 latest.noml 的 versions 提供
+      fetchText('index.noml').then(function (text) { return window.NOML.parse(text); })
+        .catch(function () { return {}; }),
     ]).then(function (results) {
-      var manifest = results[0] || {};
+      var rawEntries = Array.isArray(results[0]) ? results[0] : [];
+      var manifest = results[1] || {};
       var latestKeys = {};
-      (Array.isArray(results[1]) ? results[1] : []).forEach(function (entry) {
+
+      var list = rawEntries.map(function (entry) {
         var s = String(entry);
         var at = s.lastIndexOf('@');
-        if (at > 0) latestKeys[s.slice(0, at)] = s.slice(at + 1);
-      });
+        if (at <= 0) return null;
+        var left = s.slice(0, at);
+        var repoKey = s.slice(at + 1);
+        var colon = left.lastIndexOf(':');
+        if (colon <= 0) return null;
+        var name = left.slice(0, colon);
+        var version = left.slice(colon + 1);
+        latestKeys[name + ':' + version] = repoKey;
+        var parts = repoKey.split('/');
+        return {
+          name: name,
+          version: version,
+          host: parts[0] || '',
+          owner: parts[1] || '',
+          repo: parts[2] || '',
+          repoKey: repoKey,
+          latestPath: 'packages/' + name + '/' + repoKey + '/latest.noml',
+          snapshot: 'packages/' + name + '/' + repoKey + '/' + version + '/package.noml',
+        };
+      }).filter(Boolean);
 
-      var entries = Array.isArray(manifest.snapshots) ? manifest.snapshots : [];
-      return Promise.all(entries.map(function (entry) {
-        return Promise.all([
-          fetchText(entry.snapshot),
-          fetchText(entry.latest).catch(function () { return null; }),
-        ]).then(function (pair) {
-          var pkg = window.NOML.parse(pair[0]) || {};
-          var latest = pair[1] ? (window.NOML.parse(pair[1]) || {}) : {};
-          return recordFrom(entry, pkg, latest);
+      return Promise.all(list.map(function (item) {
+        return fetchText(item.latestPath).then(function (text) { return window.NOML.parse(text) || {}; })
+          .catch(function () { return {}; })
+          .then(function (latest) {
+            var versions = Array.isArray(latest.versions) ? latest.versions : [];
+            // 索引缺最新版本时补一条，保证默认版本一定能加载
+            if (!versions.some(function (v) { return v && v.version === item.version; })) {
+              versions = versions.concat([{ version: item.version, commit: latest.commit || '' }]);
+            }
+            item.latest = latest;
+            item.versions = versions.map(function (v) {
+              return {
+                version: v.version,
+                commit: v.commit || '',
+                snapshot: 'packages/' + item.name + '/' + item.repoKey + '/' + v.version + '/package.noml',
+              };
+            });
+            return item;
+          });
+      })).then(function (items) {
+        // 只加载默认版本的 package.noml
+        return Promise.all(items.map(function (item) {
+          return fetchText(item.snapshot).then(function (text) {
+            return { item: item, pkg: window.NOML.parse(text) || {} };
+          });
+        }));
+      }).then(function (loaded) {
+        var packages = loaded.map(function (x) {
+          var item = x.item;
+          return recordFrom({
+            name: item.name,
+            version: item.version,
+            tag: '',
+            host: item.host,
+            owner: item.owner,
+            repo: item.repo,
+            repo_version: item.version,
+            snapshot: item.snapshot,
+          }, x.pkg, { commit: (item.latest && item.latest.commit) || '' });
         });
-      })).then(function (packages) {
+
+        var versionMeta = {};
+        loaded.forEach(function (x) {
+          var item = x.item;
+          versionMeta[item.name + '@' + item.repoKey] = {
+            name: item.name,
+            repoKey: item.repoKey,
+            versions: item.versions.map(function (v) {
+              return { repoVersion: v.version, commit: v.commit, snapshot: v.snapshot, entry: null };
+            }),
+          };
+        });
+
         return {
           generatedAt: manifest.generated_at || '',
           source: manifest.source || 'nohub gh-pages noml 数据',
           count: packages.length,
           packages: packages,
           latestKeys: latestKeys,
+          versionMeta: versionMeta,
         };
       });
     });

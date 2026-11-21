@@ -116,9 +116,16 @@ test('全量同步：写快照、包级 latest、根 latest 与 state', async (t
   assert.equal(read(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'), GLOSSARY);
   assert.equal(read(dir, 'packages/noui/github.com/lizongying/nolang/v0.4.28/package.noml'), NOUI);
 
-  // 包级 latest.noml
+  // 包级 latest.noml：version/commit 指向最新，versions 是全量版本索引（升序）
   const latest = parseNoml(read(dir, 'packages/glossary/github.com/lizongying/nolang/latest.noml'));
-  assert.deepEqual(latest, { version: 'v0.4.28', commit: SHA_B });
+  assert.deepEqual(latest, {
+    version: 'v0.4.28',
+    commit: SHA_B,
+    versions: [
+      { version: 'v0.4.27', commit: SHA_A },
+      { version: 'v0.4.28', commit: SHA_B },
+    ],
+  });
 
   // 根 latest.noml
   assert.deepEqual(
@@ -136,7 +143,7 @@ test('全量同步：写快照、包级 latest、根 latest 与 state', async (t
   assert.deepEqual(state['github.com/lizongying/nolang'].packages, ['glossary', 'noui']);
 });
 
-test('全量同步：为每个仓库版本都写快照，latest 只指向最新', async (t) => {
+test('全量同步：为每个仓库版本都写快照，latest 带全量版本索引', async (t) => {
   const dir = makeRoot();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   writeAuthors(dir, `[\n  'nolang',\n]\n`);
@@ -153,10 +160,17 @@ test('全量同步：为每个仓库版本都写快照，latest 只指向最新'
   // report.versions 升序，最新版本在末尾
   assert.deepEqual(report.repos[0].versions.map((v) => v.version), ['v0.4.27', 'v0.4.28']);
 
-  // 包级 / 根 latest.noml 只指向最新版本
+  // 包级 latest.noml 指向最新，versions 索引覆盖全部有快照的版本
   assert.deepEqual(
     parseNoml(read(dir, 'packages/glossary/github.com/lizongying/nolang/latest.noml')),
-    { version: 'v0.4.28', commit: SHA_B },
+    {
+      version: 'v0.4.28',
+      commit: SHA_B,
+      versions: [
+        { version: 'v0.4.27', commit: SHA_A },
+        { version: 'v0.4.28', commit: SHA_B },
+      ],
+    },
   );
   assert.deepEqual(parseNoml(read(dir, 'latest.noml')), [
     'glossary:v0.4.28@github.com/lizongying/nolang',
