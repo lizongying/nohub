@@ -1,37 +1,53 @@
 /* ============================================================
-   nohub 搜索页交互逻辑
-   数据来源：data.js（由 web/build.mjs 从 packages/ 快照生成）
-   说明：package.noml 的 version 字段与 release 相关，页面不展示；
+  nohub 搜索页交互逻辑
+  数据来源：
+    - 本地预览：data.js（由 web/build.mjs 从 packages/ 快照预编译）
+    - gh-pages：fetch index.noml 清单，再逐份 fetch package.noml，
+                用 noml.js 在浏览器里解析（原始 noml 数据）
+  说明：package.noml 的 version 字段与 release 相关，页面不展示；
         版本以快照目录的仓库版本（repoVersion）为准，可切换。
    ============================================================ */
 (function () {
   'use strict';
 
-  var INDEX = window.NOHUB_INDEX || { packages: [], generatedAt: '', source: '' };
-  var PKGS = INDEX.packages || [];
+  var INDEX = window.NOHUB_INDEX || null;
+  var PKGS = INDEX ? INDEX.packages || [] : [];
 
   // no 运行时一键安装命令（尚未安装 no 时先执行）
   var NO_INSTALL_CMD = 'curl -fsSL https://raw.githubusercontent.com/lizongying/nolang/main/install.sh | sh';
 
   // ---------- 按包分组（同名同仓库的多个版本快照归为一组） ----------
   var GROUPS = {};
-  PKGS.forEach(function (p) {
-    var repoKey = p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
-    var k = p.name + '@' + repoKey;
-    if (!GROUPS[k]) GROUPS[k] = { key: k, repoKey: repoKey, name: p.name, versions: [] };
-    GROUPS[k].versions.push(p);
-  });
-  Object.keys(GROUPS).forEach(function (k) {
-    GROUPS[k].versions.sort(function (a, b) {
-      return compareVersions(b.repoVersion, a.repoVersion);
+  var GROUP_LIST = [];
+
+  function buildGroups() {
+    GROUPS = {};
+    PKGS.forEach(function (p) {
+      var repoKey = p.repoKey || (p.host + '/' + p.owner + '/' + p.repo);
+      var k = p.name + '@' + repoKey;
+      if (!GROUPS[k]) GROUPS[k] = { key: k, repoKey: repoKey, name: p.name, versions: [] };
+      GROUPS[k].versions.push(p);
     });
-    GROUPS[k].default = GROUPS[k].versions[0];
-  });
-  var GROUP_LIST = Object.keys(GROUPS).map(function (k) { return GROUPS[k]; })
-    .sort(function (a, b) {
-      var byName = a.name.localeCompare(b.name);
-      return byName !== 0 ? byName : a.repoKey.localeCompare(b.repoKey);
+    var latestKeys = (INDEX && INDEX.latestKeys) || {};
+    Object.keys(GROUPS).forEach(function (k) {
+      var group = GROUPS[k];
+      group.versions.sort(function (a, b) {
+        return compareVersions(b.repoVersion, a.repoVersion);
+      });
+      // 默认展示 latest.noml 指向的版本；缺失时取仓库版本最高者
+      var latest = null;
+      for (var i = 0; i < group.versions.length; i++) {
+        var v = group.versions[i];
+        if (latestKeys[v.name + ':' + v.repoVersion] === group.repoKey) { latest = v; break; }
+      }
+      group.default = latest || group.versions[0];
     });
+    GROUP_LIST = Object.keys(GROUPS).map(function (k) { return GROUPS[k]; })
+      .sort(function (a, b) {
+        var byName = a.name.localeCompare(b.name);
+        return byName !== 0 ? byName : a.repoKey.localeCompare(b.repoKey);
+      });
+  }
 
   var state = {
     q: '',
@@ -566,9 +582,155 @@
     }
   });
 
-  // ---------- 初始化 ----------
-  renderHeader();
-  renderChips();
-  renderResults();
-  renderDetail();
+  // ---------- gh-pages 数据加载（fetch + noml 解析） ----------
+  function fetchText(url) {
+    return fetch(url, { cache: 'no-cache' }).then(function (res) {
+      if (!res.ok) throw new Error(url + ' 加载失败（HTTP ' + res.status + '）');
+      return res.text();
+    });
+  }
+
+  function arrOf(value) {
+    return Array.isArray(value) ? value.filter(function (x) { return typeof x === 'string'; }) : [];
+  }
+
+  function orEmpty(value) {
+    return value == null ? '' : value;
+  }
+
+  /** docs 回退链：docs -> homepage -> repository */
+  function resolveDocs(pkg) {
+    return pkg.docs || pkg.homepage || normalizeRepoUrl(pkg.repository) || '';
+  }
+
+  /** 把 git 克隆地址（git@ / ssh:// / 裸域名）统一成可点击的 https 页面地址 */
+  function normalizeRepoUrl(url) {
+    if (!url) return '';
+    var s = String(url).trim();
+    if (!s) return '';
+    var m = s.match(/^git@([^:\s]+):(.+)$/);
+    if (m) return 'https://' + m[1] + '/' + m[2].replace(/\.git\/?$/i, '').replace(/\/+$/, '');
+    m = s.match(/^ssh:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/i);
+    if (m) return 'https://' + m[1] + '/' + m[2].replace(/\.git\/?$/i, '').replace(/\/+$/, '');
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s) && /^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(s)) {
+      return 'https://' + s;
+    }
+    return s.replace(/\.git\/?$/i, '');
+  }
+
+  /** 快照清单条目 + 解析后的 package.noml / latest.noml → 索引记录 */
+  function recordFrom(entry, pkg, latest) {
+    return {
+      name: entry.name,
+      version: entry.version,
+      description: orEmpty(pkg.description),
+      keywords: arrOf(pkg.keywords),
+      author: orEmpty(pkg.author),
+      email: orEmpty(pkg.email),
+      organization: orEmpty(pkg.organization),
+      repository: orEmpty(pkg.repository),
+      repoUrl: normalizeRepoUrl(pkg.repository),
+      homepage: orEmpty(pkg.homepage),
+      license: orEmpty(pkg.license),
+      dependencies: arrOf(pkg.dependencies),
+      devDependencies: arrOf(pkg['dev-dependencies']),
+      category: orEmpty(pkg.category),
+      docs: orEmpty(pkg.docs),
+      readme: orEmpty(pkg.readme),
+      tagPattern: orEmpty(pkg.tag_pattern),
+      tagPrefix: orEmpty(pkg.tag_prefix),
+      publish: pkg.publish !== false,
+      compiler: pkg.compiler && typeof pkg.compiler === 'object' ? pkg.compiler : {},
+      output: orEmpty(pkg.output),
+      ignore: arrOf(pkg.ignore),
+      host: entry.host,
+      owner: entry.owner,
+      repo: entry.repo,
+      repoVersion: entry.repo_version,
+      repoKey: entry.host + '/' + entry.owner + '/' + entry.repo,
+      tag: entry.tag,
+      docsUrl: resolveDocs(pkg),
+      snapshotPath: entry.snapshot,
+      latestCommit: latest && latest.commit ? latest.commit : '',
+    };
+  }
+
+  /**
+   * gh-pages 数据流：
+   *   1. fetch index.noml（版本清单）与 latest.noml（最新指针）
+   *   2. 按清单逐份 fetch packages/.../package.noml 与同级 latest.noml
+   *   3. 用 noml.js 解析成与 data.js 相同结构的索引
+   */
+  function loadNomlIndex() {
+    if (!window.NOML) return Promise.reject(new Error('noml.js 未加载，无法解析数据'));
+    return Promise.all([
+      fetchText('index.noml').then(function (text) { return window.NOML.parse(text); }),
+      fetchText('latest.noml').then(function (text) { return window.NOML.parse(text); })
+        .catch(function () { return []; }),
+    ]).then(function (results) {
+      var manifest = results[0] || {};
+      var latestKeys = {};
+      (Array.isArray(results[1]) ? results[1] : []).forEach(function (entry) {
+        var s = String(entry);
+        var at = s.lastIndexOf('@');
+        if (at > 0) latestKeys[s.slice(0, at)] = s.slice(at + 1);
+      });
+
+      var entries = Array.isArray(manifest.snapshots) ? manifest.snapshots : [];
+      return Promise.all(entries.map(function (entry) {
+        return Promise.all([
+          fetchText(entry.snapshot),
+          fetchText(entry.latest).catch(function () { return null; }),
+        ]).then(function (pair) {
+          var pkg = window.NOML.parse(pair[0]) || {};
+          var latest = pair[1] ? (window.NOML.parse(pair[1]) || {}) : {};
+          return recordFrom(entry, pkg, latest);
+        });
+      })).then(function (packages) {
+        return {
+          generatedAt: manifest.generated_at || '',
+          source: manifest.source || 'nohub gh-pages noml 数据',
+          count: packages.length,
+          packages: packages,
+          latestKeys: latestKeys,
+        };
+      });
+    });
+  }
+
+  function showLoadError(err) {
+    var results = document.getElementById('results');
+    if (results) results.innerHTML = '';
+    var meta = document.getElementById('resultsMeta');
+    if (meta) meta.innerHTML = '';
+    var empty = document.getElementById('emptyState');
+    if (empty) empty.hidden = false;
+    var title = document.querySelector('.empty-title');
+    if (title) title.textContent = '数据加载失败';
+    var sub = document.querySelector('.empty-sub');
+    if (sub) sub.textContent = String((err && err.message) || err || '');
+  }
+
+  // ---------- 启动 ----------
+  function boot() {
+    buildGroups();
+    renderHeader();
+    renderChips();
+    renderResults();
+    renderDetail();
+  }
+
+  // 本地预览：data.js 已注入 window.NOHUB_INDEX，直接渲染；
+  // gh-pages：无 data.js，走 fetch + noml 解析。
+  if (INDEX) {
+    boot();
+  } else {
+    var metaEl = document.getElementById('resultsMeta');
+    if (metaEl) metaEl.textContent = '正在加载 noml 数据…';
+    loadNomlIndex().then(function (idx) {
+      INDEX = idx;
+      PKGS = idx.packages || [];
+      boot();
+    }).catch(showLoadError);
+  }
 })();
