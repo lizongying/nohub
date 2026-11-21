@@ -239,13 +239,6 @@
       (valueHtml ? '' : 'is-empty') + '">' + (valueHtml || '—') + '</dd>';
   }
 
-  function linkIf(url, text, ghost) {
-    if (!url) return '';
-    return '<a class="link-btn' + (ghost ? ' ghost' : '') + '" href="' + escapeHtml(url) +
-      '" target="_blank" rel="noopener noreferrer">' + escapeHtml(text) +
-      ' <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></a>';
-  }
-
   // 源码仓库地址：优先用构建期规范化过的 repoUrl，缺失时做运行时兜底
   function repoUrlOf(p) {
     if (p.repoUrl) return p.repoUrl;
@@ -327,8 +320,6 @@
       return '<span class="dep">' + escapeHtml(d) + '</span>';
     }).join('') || emptyDep;
 
-    // 文档入口：docs → homepage → repository 回退链取值
-    var docsLabel = '文档入口';
     var linkLibs = Array.isArray(compiler['link-libs']) && compiler['link-libs'].length
       ? compiler['link-libs'].map(escapeHtml).join(', ') : '无';
     var keywords = (p.keywords || []).map(function (k) {
@@ -360,9 +351,6 @@
           (p.description ? '<p class="detail-desc">' + highlight(p.description, tokens) + '</p>' : '') +
         '</div>' +
         '<div class="detail-links">' +
-          linkIf(repoUrlOf(p), '源码仓库') +
-          (p.docsUrl && p.docsUrl !== p.homepage ? linkIf(p.docsUrl, docsLabel, true) : '') +
-          (p.homepage && p.homepage !== p.docsUrl ? linkIf(p.homepage, '主页', true) : '') +
           copyBtn('no install ' + pkgRef(p), '安装可执行文件') +
           copyBtn('no add ' + pkgRef(p), '导入包') +
         '</div>' +
@@ -372,8 +360,14 @@
             '<dl class="kv">' +
               kvRow('包名', escapeHtml(p.name), true) +
               '<dt>版本</dt><dd><div class="ver-list">' + verChips + '</div></dd>' +
+              kvRow('仓库', repoUrlOf(p)
+                ? '<a class="inline-link" href="' + escapeHtml(repoUrlOf(p)) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(repoUrlOf(p)) + '</a>'
+                : '') +
               '<dt>关键词</dt><dd><div class="pkg-tags" style="margin:0">' + (keywords || emptyDep) + '</div></dd>' +
               kvRow('分类', escapeHtml(p.category || '')) +
+              kvRow('主页', p.homepage
+                ? '<a class="inline-link" href="' + escapeHtml(p.homepage) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(p.homepage) + '</a>'
+                : '') +
               kvRow('许可证', escapeHtml(p.license || '')) +
               kvRow('发布状态', p.publish ? '已发布' : '未发布') +
             '</dl>' +
@@ -384,9 +378,6 @@
               kvRow('作者', escapeHtml(p.author || '')) +
               kvRow('邮箱', escapeHtml(p.email || '')) +
               kvRow('组织', escapeHtml(p.organization || '')) +
-              kvRow('主页', p.homepage
-                ? '<a class="inline-link" href="' + escapeHtml(p.homepage) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(p.homepage) + '</a>'
-                : '') +
             '</dl>' +
           '</div>' +
           '<div class="detail-section">' +
