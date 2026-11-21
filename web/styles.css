@@ -463,6 +463,12 @@ mark {
 }
 .install-cmd-btn:hover { background: #eef0f6; }
 .install-cmd-btn.copied { background: #e6f4ea; }
+.install-cmd-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
 .link-btn {
   display: inline-flex;
   align-items: center;
