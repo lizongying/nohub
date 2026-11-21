@@ -361,7 +361,7 @@
         '</div>' +
         '<div class="detail-links">' +
           linkIf(repoUrlOf(p), '源码仓库') +
-          linkIf(p.docsUrl, docsLabel, true) +
+          (p.docsUrl && p.docsUrl !== p.homepage ? linkIf(p.docsUrl, docsLabel, true) : '') +
           (p.homepage && p.homepage !== p.docsUrl ? linkIf(p.homepage, '主页', true) : '') +
           copyBtn('no install ' + pkgRef(p), '安装可执行文件') +
           copyBtn('no add ' + pkgRef(p), '导入包') +
