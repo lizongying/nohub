@@ -73,8 +73,8 @@
     </div>
   </footer>
 
-  <!-- data.js 仅本地预览注入；gh-pages 不发布它，app.js 会走 fetch + noml 解析 -->
-  <script src="data.js"></script>
+  <!-- data.js 仅本地预览注入（app.js 在 localhost / file:// 下动态加载）；
+       线上 gh-pages 不请求它，app.js 走 fetch + noml 解析 -->
   <script src="noml.js"></script>
   <script src="app.js"></script>
 </body>

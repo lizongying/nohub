@@ -858,11 +858,7 @@
     renderDetail();
   }
 
-  // 本地预览：data.js 已注入 window.NOHUB_INDEX，直接渲染；
-  // gh-pages：无 data.js，走 fetch + noml 解析。
-  if (INDEX) {
-    boot();
-  } else {
+  function startNoml() {
     var metaEl = document.getElementById('resultsMeta');
     if (metaEl) metaEl.textContent = '正在加载 noml 数据…';
     loadNomlIndex().then(function (idx) {
@@ -870,5 +866,28 @@
       PKGS = idx.packages || [];
       boot();
     }).catch(showLoadError);
+  }
+
+  // 本地预览（localhost / file://）才注入 data.js；
+  // 线上（gh-pages）不请求 data.js，直接 fetch index.noml + noml 解析。
+  function isLocalPreview() {
+    var h = location.hostname;
+    return h === 'localhost' || h === '127.0.0.1' || location.protocol === 'file:';
+  }
+
+  if (INDEX) {
+    boot();
+  } else if (isLocalPreview()) {
+    var dataScript = document.createElement('script');
+    dataScript.src = 'data.js';
+    dataScript.onload = function () {
+      INDEX = window.NOHUB_INDEX || null;
+      PKGS = INDEX ? INDEX.packages || [] : [];
+      boot();
+    };
+    dataScript.onerror = startNoml;
+    document.head.appendChild(dataScript);
+  } else {
+    startNoml();
   }
 })();
