@@ -3,7 +3,8 @@ name: sync
 # nohub 同步工作流：作者记录（repos/**）变更后即时触发，每日定时兜底。
 # 同步程序 `node bin/nohub.mjs sync` 拉取上游仓库的 workspace.noml / package.noml，
 # 写入 workspaces/ packages/ 快照、根目录 latest.noml 与 state/sync.noml，
-# 再重建 web/data.js 索引，一并提交回仓库。
+# 再重建 web/data.js 与 web/index.noml，一并提交回仓库；
+# 随后把页面文件与根级 noml 数据（packages/ workspaces/ latest.noml）发布到 gh-pages。
 on:
   schedule:
     - cron: '1 0 * * *'          # 每日 00:01 UTC = Asia/Shanghai 08:01
@@ -38,28 +39,32 @@ jobs:
 
       - name: 回写快照
         run: |
-          git add workspaces packages latest.noml state web/data.js
+          git add workspaces packages latest.noml state web/data.js web/index.noml web/noml.js
           git diff --cached --quiet && exit 0
           git -c user.name='nohub-bot' \
               -c user.email='nohub-bot@users.noreply.github.com' \
               commit -m 'sync: update manifests'
           git push
 
-      # 搜索页部署在 gh-pages 分支，同步后一并更新，保持线上页面与索引一致。
+      # 搜索页部署在 gh-pages 分支：页面文件 + 根级 noml 数据（packages/ workspaces/ latest.noml）。
+      # 线上页面 fetch index.noml 清单，再逐份 fetch packages/.../package.noml 解析。
       - name: 同步搜索页（gh-pages）
         continue-on-error: true
         run: |
           set -e
           # checkout 默认只浅抓 main 一个分支，gh-pages 要显式取回；
-          # 同时先记下 main 的 SHA，切分支后才仍取得到 web/ 源文件。
+          # 同时先记下 main 的 SHA，切分支后才仍取得到 web/ 与 packages/。
           SRC=$(git rev-parse HEAD)
           git fetch --depth 1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages
           git checkout -B gh-pages origin/gh-pages
           git rm -rf -q . || true
-          for f in index.html app.js styles.css data.js; do git show "$SRC:web/$f" > "$f"; done
+          for f in index.html app.js styles.css noml.js; do git show "$SRC:web/$f" > "$f"; done
+          git show "$SRC:latest.noml" > latest.noml
+          git show "$SRC:web/index.noml" > index.noml
+          git archive "$SRC" packages workspaces | tar -x
           git add -A
           git diff --cached --quiet && exit 0
           git -c user.name='nohub-bot' \
               -c user.email='nohub-bot@users.noreply.github.com' \
-              commit -m 'pages: sync web'
+              commit -m 'pages: sync web + noml data'
           git push origin gh-pages

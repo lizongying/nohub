@@ -1,6 +1,6 @@
 # nohub noml 格式规范
 
-本文件定义 nohub 使用的 noml 格式。目标是：**用户提交一个 GitHub repo，nohub 自动同步该 repo 的 `workspace.noml` 与 `package.noml`，按仓库版本留存清单快照，并据此建立包索引、支撑搜索/预览/文档入口**。源码仍留在各自独立 repo，nohub 只保存索引与清单快照。
+本文件定义 nohub 使用的 noml 格式。目标是：**用户提交一个 GitHub repo，nohub 自动同步该 repo 的 `workspace.noml` 与 `package.noml`，按仓库版本留存清单快照**。源码仍留在各自独立 repo，nohub 只保存清单快照；面向用户的搜索/预览/文档入口由 `no` CLI 直接扫描 `packages/**/package.noml` 快照构建索引提供，nohub 自身只做同步。
 
 noml 不是新造格式，它复用 Nolang 工具链（`no`）的配置格式：`package.noml` / `workspace.noml` 本身就被 `no build` / `no run` 消费。nohub 与 `no` 读同一份文件，因此社区仓库不需要为 nohub 维护额外清单。
 
@@ -8,7 +8,7 @@ noml 不是新造格式，它复用 Nolang 工具链（`no`）的配置格式：
 
 ## 定位：规范 + 参考实现，多实例
 
-nohub 不是唯一的官方单点，而是**一套 registry 规范 + 一个参考实现**。本文件定义规范：三类 noml 文件、同步与索引流程、搜索与安装协议。任何实现只要遵守这套规范，就能对外提供 nohub 兼容的 registry。
+nohub 不是唯一的官方单点，而是**一套 registry 规范 + 一个参考实现**。本文件定义规范：三类 noml 文件、同步与索引流程，以及索引如何被客户端消费。任何实现只要遵守这套规范，就能对外提供 nohub 兼容的 registry。
 
 - **公共实例**：参考实现部署在 `lizongying/nohub`，是默认的公共源。
 - **自建实例**：任何人随时可以 clone 参考实现、指向自己的 `repos/` 部署私有实例，目录结构与公共实例完全一致。
@@ -302,25 +302,46 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: 24
+          package-manager-cache: false
       - name: 同步清单
         run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict
       - name: 重建索引
         run: node web/build.mjs
       - name: 回写快照
         run: |
-          git add workspaces packages latest.noml state web/data.js
+          git add workspaces packages latest.noml state web/data.js web/index.noml web/noml.js
           git diff --cached --quiet && exit 0
           git -c user.name='nohub-bot' \
               -c user.email='nohub-bot@users.noreply.github.com' \
               commit -m 'sync: update manifests'
           git push
+
+      # 搜索页部署在 gh-pages：页面文件 + 根级 noml 数据（packages/ workspaces/ latest.noml）。
+      - name: 同步搜索页（gh-pages）
+        continue-on-error: true
+        run: |
+          set -e
+          SRC=$(git rev-parse HEAD)
+          git fetch --depth 1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages
+          git checkout -B gh-pages origin/gh-pages
+          git rm -rf -q . || true
+          for f in index.html app.js styles.css noml.js; do git show "$SRC:web/$f" > "$f"; done
+          git show "$SRC:latest.noml" > latest.noml
+          git show "$SRC:web/index.noml" > index.noml
+          git archive "$SRC" packages workspaces | tar -x
+          git add -A
+          git diff --cached --quiet && exit 0
+          git -c user.name='nohub-bot' \
+              -c user.email='nohub-bot@users.noreply.github.com' \
+              commit -m 'pages: sync web + noml data'
+          git push origin gh-pages
 ```
 
-工作流只回写 `workspaces/`、`packages/`、`latest.noml`、`state/`、`web/data.js`，不碰 `repos/`，因此不会自我触发。`schedule` 在仓库长期无活动时可能被 GitHub 停用，所以即时同步（`push`）是主要触发来源。
+工作流回写 `workspaces/`、`packages/`、`latest.noml`、`state/`、`web/data.js`、`web/index.noml`、`web/noml.js`，不碰 `repos/`，因此不会自我触发。`schedule` 在仓库长期无活动时可能被 GitHub 停用，所以即时同步（`push`）是主要触发来源。注意 `push` 触发条件限定 `repos/**`，改动 `web/`、`.github/` 后需要在 Actions 页面手动 `Run workflow` 才会部署 gh-pages。
 
 ### 6.5 命令行
 
@@ -474,7 +495,7 @@ packages/glossary/github.com/lizongying/nolang/latest.noml
 
 ## 9. 索引输出
 
-nohub 的索引记录由同步生成，供搜索、预览、文档入口读取。每条记录包含：
+nohub 同步产出的是 `packages/**/package.noml` 快照与 `latest.noml`；`no search` / `no info` / `no docs` 直接扫描这些清单、各自构建索引（字段映射与 `web/build.mjs` 一致），nohub 自身不提供 CLI 检索命令。gh-pages 静态搜索页不扫源仓库，而是 fetch 同步工作流发布到分支根级的 noml 数据（见 9.1）。每条记录包含：
 
 | 字段 | 来源 |
 | --- | --- |
@@ -495,6 +516,28 @@ nohub 的索引记录由同步生成，供搜索、预览、文档入口读取�
 | `synced_at` | 同步任务 |
 
 索引只保存这些元数据，不保存源码。每条记录都对应一份不可变快照 `packages/<name>/<host>/<owner>/<repo>/<repo_version>/package.noml`。
+
+### 9.1 gh-pages 数据布局与前端解析
+
+`web/build.mjs` 除了 `web/data.js`（本地预览注入），还生成一份快照清单 `web/index.noml`：枚举全部 `packages/<name>/<host>/<owner>/<repo>/<repo_version>/package.noml` 与包级 `latest.noml`。工作流把它和同步产出的 `packages/`、`workspaces/`、`latest.noml` 一起发布到 gh-pages 根级：
+
+```
+index.html  app.js  styles.css  noml.js
+index.noml                  # 快照清单：snapshots[] 逐条列出 snapshot / latest 相对路径
+latest.noml                 # 根清单：['name:version@host/owner/repo', ...]
+packages/<name>/<host>/<owner>/<repo>/
+  latest.noml
+  <repo_version>/package.noml
+workspaces/<host>/<owner>/<repo>/<repo_version>/workspace.noml
+```
+
+页面加载流程：
+
+1. `app.js` 先 `fetch('index.noml')` 取清单（本地预览由注入的 `data.js` 直接提供同结构索引，跳过 fetch）。
+2. 再 `fetch('latest.noml')` 取根清单，得到每个仓库分组默认展示的版本（`latest.noml` 缺失时退回版本最高者）。
+3. 按清单逐份 `fetch('<snapshot>')` 与 `fetch('<latest>')`，交给 `web/noml.js` 暴露的 `window.NOML.parse` 解析（与 `lib/noml.mjs` 同一份语法实现），映射成与上表一致的记录后渲染。
+
+`data.js` 不发布到 gh-pages，因此线上页面始终走 fetch + noml 解析路径；`packages/`、`workspaces/`、`latest.noml` 原样发布，可直接被其它工具 fetch。
 
 ---
 

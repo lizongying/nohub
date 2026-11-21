@@ -1,0 +1,129 @@
+; 由 web/build.mjs 自动生成，请勿手动修改。
+; 重新生成：node web/build.mjs
+{
+  generated_at: '2026-11-21T08:19:11.018Z'
+  source: 'nohub packages/ 目录快照'
+  snapshots: [
+    {
+      name: 'glossary'
+      version: 'v0.1.0'
+      tag: 'v0.1.0'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'nolang'
+      repo_version: 'v0.4.28'
+      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'
+      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
+    },
+    {
+      name: 'noagent'
+      version: 'v0.1.35'
+      tag: 'v0.1.35'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'notools'
+      repo_version: 'v0.1.35'
+      snapshot: 'packages/noagent/github.com/lizongying/notools/v0.1.35/package.noml'
+      latest: 'packages/noagent/github.com/lizongying/notools/latest.noml'
+    },
+    {
+      name: 'nogit'
+      version: 'v0.1.35'
+      tag: 'v0.1.35'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'notools'
+      repo_version: 'v0.1.35'
+      snapshot: 'packages/nogit/github.com/lizongying/notools/v0.1.35/package.noml'
+      latest: 'packages/nogit/github.com/lizongying/notools/latest.noml'
+    },
+    {
+      name: 'noimg'
+      version: 'v0.1.35'
+      tag: 'v0.1.35'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'notools'
+      repo_version: 'v0.1.35'
+      snapshot: 'packages/noimg/github.com/lizongying/notools/v0.1.35/package.noml'
+      latest: 'packages/noimg/github.com/lizongying/notools/latest.noml'
+    },
+    {
+      name: 'nojq'
+      version: 'v0.1.35'
+      tag: 'v0.1.35'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'notools'
+      repo_version: 'v0.1.35'
+      snapshot: 'packages/nojq/github.com/lizongying/notools/v0.1.35/package.noml'
+      latest: 'packages/nojq/github.com/lizongying/notools/latest.noml'
+    },
+    {
+      name: 'nonpm'
+      version: 'v0.1.35'
+      tag: 'v0.1.35'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'notools'
+      repo_version: 'v0.1.35'
+      snapshot: 'packages/nonpm/github.com/lizongying/notools/v0.1.35/package.noml'
+      latest: 'packages/nonpm/github.com/lizongying/notools/latest.noml'
+    },
+    {
+      name: 'notools'
+      version: 'v0.1.35'
+      tag: 'v0.1.35'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'notools'
+      repo_version: 'v0.1.35'
+      snapshot: 'packages/notools/github.com/lizongying/notools/v0.1.35/package.noml'
+      latest: 'packages/notools/github.com/lizongying/notools/latest.noml'
+    },
+    {
+      name: 'nouv'
+      version: 'v0.1.35'
+      tag: 'v0.1.35'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'notools'
+      repo_version: 'v0.1.35'
+      snapshot: 'packages/nouv/github.com/lizongying/notools/v0.1.35/package.noml'
+      latest: 'packages/nouv/github.com/lizongying/notools/latest.noml'
+    },
+    {
+      name: 'test'
+      version: 'v0.4.28'
+      tag: 'v0.4.28'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'nolang'
+      repo_version: 'v0.4.28'
+      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.28/package.noml'
+      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
+    },
+    {
+      name: 'test1'
+      version: 'v0.4.28'
+      tag: 'v0.4.28'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'nolang'
+      repo_version: 'v0.4.28'
+      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.28/package.noml'
+      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
+    },
+    {
+      name: 'test2'
+      version: 'v0.4.28'
+      tag: 'v0.4.28'
+      host: 'github.com'
+      owner: 'lizongying'
+      repo: 'nolang'
+      repo_version: 'v0.4.28'
+      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.28/package.noml'
+      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
+    },
+  ]
+}

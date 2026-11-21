@@ -2,9 +2,11 @@
 
 > 一个「只索引、不存码」的社区包清单注册中心。
 
-nohub 是一个面向社区第三方库的**元数据注册中心（metadata registry）**。它不托管任何源码，源码始终留在各自的独立仓库中；nohub 只负责收录、索引、准入审核，并对外提供搜索、预览与文档入口。
+nohub 是一个面向社区第三方库的**元数据注册中心（metadata registry）**。它不托管任何源码，源码始终留在各自的独立仓库中；nohub 只负责收录、索引、准入审核与清单同步。
 
-nohub 同时也是**一套 registry 规范 + 一个参考实现**：规范定义 noml 格式与同步/索引/搜索/安装协议，参考实现部署在 `lizongying/nohub` 作为公共实例。任何人都可以自建结构一致的私有实例，`no` 客户端把多个实例作为源叠加搜索与安装。
+nohub 同时也是**一套 registry 规范 + 一个参考实现**：规范定义 noml 格式与同步/索引协议，参考实现部署在 `lizongying/nohub` 作为公共实例。任何人都可以自建结构一致的私有实例。
+
+**nohub 自身只做同步**——它不提供 `search` / `info` / `docs` 命令。面向用户的检索、预览与文档入口已经集成到 Nolang 工具链 `no` 里：`no search <query>`、`no info <pkg>`、`no docs <pkg>` 直接从 nohub 仓库的 `packages/**/package.noml` 清单快照构建索引，`no` 客户端把多个实例作为源叠加检索。详见 [与 `no` CLI 的关系](#与-no-cli-的关系)。
 
 完整的格式规范见 [`docs/noml-format.md`](docs/noml-format.md)，样例见 [`examples/`](examples/)。
 
@@ -14,14 +16,13 @@ nohub 同时也是**一套 registry 规范 + 一个参考实现**：规范定义
 
 nohub 解决的是「社区包发现难、来源散、质量不可控」的问题，但刻意不做源码托管。它扮演的角色类似 crates.io 的索引、npm 的 registry 元数据层，而不是 GitHub。
 
-具体来说，nohub 只做四件事：
+具体来说，nohub 只做三件事：
 
 1. **包清单索引与元数据 registry** —— 以 `noml` 清单为基本单元，为每个收录的包建立可检索的元数据记录。
 2. **社区收录入口与版本解析** —— 用户提交一个 GitHub repo，nohub 自动同步该 repo 的 `workspace.noml` 与 `package.noml`，按 git tag 规则解析版本，并按仓库版本留存清单快照。
-3. **搜索、预览与文档入口** —— 让用户能按名称、关键词、分类找到包，并跳转到源码仓库与文档。
-4. **准入审核** —— 所有收录都经过准入流程，保证索引里的每条记录都指向真实、可解析、符合规范的仓库。
+3. **准入审核** —— 所有收录都经过准入流程，保证索引里的每条记录都指向真实、可解析、符合规范的仓库。
 
-nohub **不做**的事同样重要：不存放全部源码、不镜像仓库、不替代 CI、不干预包的实际发布流程。源码依然分散在各个独立 repo，nohub 只做索引、manifest 与准入审核。
+nohub **不做**的事同样重要：不存放全部源码、不镜像仓库、不替代 CI、不干预包的实际发布流程；也不提供面向用户的搜索/预览/文档命令（这些在 `no` 里）。源码依然分散在各个独立 repo，nohub 只做索引、清单同步与准入审核。
 
 ---
 
@@ -36,16 +37,13 @@ flowchart LR
     R -->|Actions 即时 + 每日| P[package.noml]
     W --> SN[(版本快照\nworkspaces/ packages/)]
     P --> SN
-    SN --> I[(元数据 Registry\n索引)]
-    I --> F[搜索 Search]
-    I --> G[预览 Preview]
-    I --> H[文档入口 Docs]
-    F --> A
-    G --> A
-    H --> A
+    SN --> N[no CLI\nsearch / info / docs]
+    SN --> WEB[gh-pages 搜索页\n静态展示]
+    N --> A
+    WEB --> A
 ```
 
-数据流很轻：用户提交一个 GitHub repo，准入通过后生成收录记录；同步任务（CRUD 后即时触发，外加每日兜底）按记录拉取该 repo 的 `workspace.noml` 与各个 `package.noml`，解析、校验后写入版本快照与索引；搜索、预览、文档入口都从索引读取，并回跳原始仓库。源码本身从不经过 nohub。
+数据流很轻：用户提交一个 GitHub repo，准入通过后生成收录记录；同步任务（CRUD 后即时触发，外加每日兜底）按记录拉取该 repo 的 `workspace.noml` 与各个 `package.noml`，解析、校验后写入版本快照。检索侧不在 nohub：`no search/info/docs` 直接扫描 `packages/` 清单快照自建索引；gh-pages 静态搜索页则 fetch 工作流发布到分支根级的 noml 清单与快照，在浏览器里解析建索引（见 `docs/noml-format.md` 9.1）。两者都回跳原始仓库；`no add` / `no install` 直接指向仓库的 release。源码本身从不经过 nohub。
 
 ---
 
@@ -56,7 +54,20 @@ nohub 不是唯一的官方单点。规范约束的是**结构与协议**，不�
 - **公共实例**：参考实现部署在 `lizongying/nohub`，是默认的公共源。
 - **自建实例**：任何人随时可以 clone 参考实现、指向自己的 `repos/` 部署私有实例，目录结构与公共实例完全一致。
 - **实例隔离**：权限、审核、包可见性由每个实例自己管控；实例之间不互相同步作者记录或索引，也不共享用户与权限。A 实例的私有包不会出现在 B 实例。
-- **多源客户端**：`no` 客户端维护一个源列表，每个源指向一个 nohub 实例；搜索与安装时叠加所有源，结果带来源实例，按源优先级或显式指定解析。包引用沿用 `<pkg>@<host>/<owner>/<repo>`。
+- **多源客户端**：`no` 客户端维护一个源列表，每个源指向一个 nohub 实例；搜索时叠加所有源，结果带 `SOURCE` 列标明来源实例，同名同版本的包由**靠前的源优先**解析，也可以用 `-source <name>` 只看某个源。包引用沿用 `<pkg>@<host>/<owner>/<repo>`。
+
+源列表落在客户端 `~/no/sources.noml`（noml 格式，数组顺序即优先级），每项就是一个 nohub 仓库地址 `<host>/<owner>/<repo>`（可写 `'名字 = 仓库地址'` 起别名，也可用本地 checkout 目录）：
+
+```
+{
+  sources: [
+    'github.com/lizongying/nohub',
+    'corp = github.com/acme/nohub',
+  ]
+}
+```
+
+不配置时默认 `github.com/lizongying/nohub`；临时切换用 `NOHUB_SOURCES`（逗号分隔，覆盖配置文件）。某个源拉取失败只会告警，其余源照常返回结果。`no` 对每个源拉取仓库 tarball，扫描 `packages/**/package.noml` 与 `latest.noml` 自行建索引——与 `web/build.mjs` 用的是同一份数据，不读取生成的 `data.js`。
 
 同一个 `repos/<host>/<owner>.noml` 可以同时存在于公共实例和某个私有实例，两者互不相干；作者在不同实例上是各自独立的收录记录。
 
@@ -183,15 +194,17 @@ tag 无法解析只告警、不拒绝写入：只有显式声明了 `tag_pattern
 
 ---
 
-## 搜索、预览与文档入口
+## 与 `no` CLI 的关系
 
-索引对外提供三个只读入口，均基于元数据，不涉及源码托管：
+nohub 只做清单同步，不提供面向用户的检索命令。搜索、预览与文档入口都在 Nolang 工具链 `no` 里，三个只读命令直接扫描 nohub 仓库的 `packages/**/package.noml` 清单快照构建索引，不涉及源码托管：
 
-- **搜索**：按包名、关键词、分类检索，返回包名、描述、当前版本、仓库地址。
-- **预览**：展示包的元数据摘要（名称、版本、许可证、关键词、作者、收录时间），并给出源码仓库与文档的跳转链接。
-- **文档入口**：优先取 `docs`，回退 `homepage`，再回退 `repository`；nohub 不缓存、不渲染文档内容。
+- **`no search <query>`** —— 按包名、关键词、分类检索，返回包名、描述、当前版本、仓库地址。
+- **`no info <pkg>`** —— 展示包的元数据摘要（名称、版本、许可证、关键词、作者、commit），并给出安装/导入命令与文档地址。
+- **`no docs <pkg>`** —— 打印文档 URL：优先取 `docs`，回退 `homepage`，再回退 `repository`；nohub 不缓存、不渲染文档内容。
 
-三个入口的共同原则是「**指向而非托管**」：用户从 nohub 找到包，再跳转到它真正的仓库与文档。
+`no` 默认读取公共仓库 `github.com/lizongying/nohub`。要叠加多个实例，在 `~/no/sources.noml` 配置仓库地址列表（见〈实例与多源〉）；`NOHUB_SOURCES` 可临时覆盖。三个命令都接受 `-source <name>` 只看指定源；`no search` 的输出带 `SOURCE` 列。gh-pages 上的静态搜索页是从同一份 `packages/` 清单构建的另一个视图。
+
+三个命令的共同原则是「**指向而非托管**」：用户找到包后，再跳转到它真正的仓库与文档，或用 `no add` / `no install` 导入。
 
 ---
 
@@ -205,7 +218,7 @@ nohub 与源码仓库是**索引与被索引**的关系，边界清晰：
 | 版本历史 | 只记录 tag ↔ commit | 完整维护 |
 | 清单快照 | 按仓库版本留存 | 随源码版本化 |
 | 构建 / CI | 不参与 | 自行负责 |
-| 包元数据 | 索引与检索 | 以 `noml` 清单声明 |
+| 包元数据 | 索引与检索（由 `no` 消费） | 以 `noml` 清单声明 |
 | 文档内容 | 只提供入口 | 实际承载 |
 
 这种设计让 nohub 保持轻量：它不需要存储大量源码，不需要处理构建产物，只维护一份可信的索引，并让社区包的发现与准入变得可控。
@@ -227,12 +240,12 @@ nohub 与源码仓库是**索引与被索引**的关系，边界清晰：
 # 3. 审核通过后立即触发同步，拉取清单、写入版本快照与索引（每日任务兜底）
 ```
 
-用户在 nohub 上搜索、预览、跳转到文档：
+检索、预览、跳转到文档统一在 `no` 里完成（nohub 自身没有这些命令）：
 
 ```bash
-nohub search glossary
-nohub info glossary
-nohub docs glossary
+no search glossary
+no info glossary
+no docs glossary
 ```
 
 ---

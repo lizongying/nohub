@@ -4,19 +4,22 @@
  *
  * 扫描仓库 packages/ 目录下的版本快照：
  *   packages/<pkg>/<host>/<owner>/<repo>/<repo_version>/package.noml
- * 以及同级的 latest.noml（含 version / commit），解析 noml 清单后
- * 生成 web/data.js（window.NOHUB_INDEX），供搜索页使用。
+ * 以及同级的 latest.noml（含 version / commit），解析 noml 清单后生成：
+ *   - web/data.js    ：预编译索引（window.NOHUB_INDEX），本地预览用
+ *   - web/index.noml ：快照清单（gh-pages 发布到 data/，前端 fetch 后解析）
  *
  * 用法：node web/build.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stringifyNoml } from '../lib/noml.mjs';
 
 const WEB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(WEB_DIR, '..');
 const PACKAGES_DIR = path.join(ROOT, 'packages');
 const OUT_FILE = path.join(WEB_DIR, 'data.js');
+const MANIFEST_FILE = path.join(WEB_DIR, 'index.noml');
 
 // ---------------------------------------------------------------------------
 // 迷你 noml 解析器（覆盖 package.noml / latest.noml 用到的语法子集）
@@ -197,9 +200,10 @@ function compareVersions(a, b) {
   return String(a).localeCompare(String(b));
 }
 
-function buildIndex() {
+/** 扫描 packages/ 下全部版本快照，附带解析后的 package.noml 与同级 latest.noml */
+function scanSnapshots() {
   const files = walk(PACKAGES_DIR);
-  const records = [];
+  const snapshots = [];
 
   for (const file of files) {
     const rel = path.relative(PACKAGES_DIR, file).split(path.sep);
@@ -207,74 +211,122 @@ function buildIndex() {
     if (rel.length !== 6) continue;
     const [pkgDir, host, owner, repo, repoVersion] = rel;
 
-    const src = fs.readFileSync(file, 'utf8');
-    const pkg = parseNoml(src);
+    const pkg = parseNoml(fs.readFileSync(file, 'utf8'));
 
     // latest.noml 位于 packages/<pkg>/<host>/<owner>/<repo>/latest.noml
-    const latestFile = path.join(PACKAGES_DIR, ...rel.slice(0, 4), 'latest.noml');
     let latest = null;
     try {
-      latest = parseNoml(fs.readFileSync(latestFile, 'utf8'));
+      latest = parseNoml(
+        fs.readFileSync(path.join(PACKAGES_DIR, ...rel.slice(0, 4), 'latest.noml'), 'utf8'),
+      );
     } catch {
       latest = null;
     }
 
-    records.push({
-      // 包元数据
-      name: pkg.name ?? pkgDir,
-      // version 允许缺省，缺省回落到仓库版本（规范第 7 节）
-      version: pkg.version ?? repoVersion,
-      description: pkg.description ?? '',
-      keywords: Array.isArray(pkg.keywords) ? pkg.keywords.filter((k) => typeof k === 'string') : [],
-      author: pkg.author ?? '',
-      email: pkg.email ?? '',
-      organization: pkg.organization ?? '',
-      repository: pkg.repository ?? '',
-      repoUrl: normalizeRepoUrl(pkg.repository),
-      homepage: pkg.homepage ?? '',
-      license: pkg.license ?? '',
-      dependencies: Array.isArray(pkg.dependencies) ? pkg.dependencies.filter((d) => typeof d === 'string') : [],
-      devDependencies: Array.isArray(pkg['dev-dependencies'])
-        ? pkg['dev-dependencies'].filter((d) => typeof d === 'string')
-        : [],
-      // nohub 扩展
-      category: pkg.category ?? '',
-      docs: pkg.docs ?? '',
-      readme: pkg.readme ?? '',
-      tagPattern: pkg.tag_pattern ?? '',
-      tagPrefix: pkg.tag_prefix ?? '',
-      publish: pkg.publish !== false,
-      // no 编译选项
-      compiler: pkg.compiler && typeof pkg.compiler === 'object' ? pkg.compiler : {},
-      output: pkg.output ?? '',
-      ignore: Array.isArray(pkg.ignore) ? pkg.ignore.filter((x) => typeof x === 'string') : [],
-      // 索引派生
-      host,
-      owner,
-      repo,
-      repoVersion,
-      repoKey: `${host}/${owner}/${repo}`,
-      tag: resolveTag(pkg, pkg.version ?? repoVersion),
-      docsUrl: resolveDocs(pkg),
-      snapshotPath: `packages/${rel.join('/')}`,
-      latestCommit: latest?.commit ?? '',
-    });
+    snapshots.push({ pkgDir, host, owner, repo, repoVersion, pkg, latest });
   }
 
-  // 保留全部版本快照：先按包名升序，再按仓库版本降序（默认展示最新版本）
-  const sorted = records.sort((a, b) => {
-    const byName = a.name.localeCompare(b.name);
-    if (byName !== 0) return byName;
-    const byRepo = a.repoKey.localeCompare(b.repoKey);
-    if (byRepo !== 0) return byRepo;
-    return compareVersions(b.repoVersion, a.repoVersion);
-  });
+  return snapshots;
+}
 
+function stringArray(value) {
+  return Array.isArray(value) ? value.filter((x) => typeof x === 'string') : [];
+}
+
+/** 快照排序：包名升序，再按仓库版本降序（默认展示最新版本） */
+function compareSnapshots(a, b) {
+  const byName = a.name.localeCompare(b.name);
+  if (byName !== 0) return byName;
+  const byRepo = a.repoKey.localeCompare(b.repoKey);
+  if (byRepo !== 0) return byRepo;
+  return compareVersions(b.repoVersion, a.repoVersion);
+}
+
+/** 快照 → 页面索引记录（字段映射与 app.js 的 recordFrom 保持一致） */
+function recordFromSnapshot({ pkgDir, host, owner, repo, repoVersion, pkg, latest }) {
+  // version 允许缺省，缺省回落到仓库版本（规范第 7 节）
+  const version = pkg.version ?? repoVersion;
+  return {
+    // 包元数据
+    name: pkg.name ?? pkgDir,
+    version,
+    description: pkg.description ?? '',
+    keywords: stringArray(pkg.keywords),
+    author: pkg.author ?? '',
+    email: pkg.email ?? '',
+    organization: pkg.organization ?? '',
+    repository: pkg.repository ?? '',
+    repoUrl: normalizeRepoUrl(pkg.repository),
+    homepage: pkg.homepage ?? '',
+    license: pkg.license ?? '',
+    dependencies: stringArray(pkg.dependencies),
+    devDependencies: stringArray(pkg['dev-dependencies']),
+    // nohub 扩展
+    category: pkg.category ?? '',
+    docs: pkg.docs ?? '',
+    readme: pkg.readme ?? '',
+    tagPattern: pkg.tag_pattern ?? '',
+    tagPrefix: pkg.tag_prefix ?? '',
+    publish: pkg.publish !== false,
+    // no 编译选项
+    compiler: pkg.compiler && typeof pkg.compiler === 'object' ? pkg.compiler : {},
+    output: pkg.output ?? '',
+    ignore: stringArray(pkg.ignore),
+    // 索引派生
+    host,
+    owner,
+    repo,
+    repoVersion,
+    repoKey: `${host}/${owner}/${repo}`,
+    tag: resolveTag(pkg, version),
+    docsUrl: resolveDocs(pkg),
+    snapshotPath: `packages/${pkgDir}/${host}/${owner}/${repo}/${repoVersion}/package.noml`,
+    latestCommit: latest?.commit ?? '',
+  };
+}
+
+function buildIndex() {
+  const records = scanSnapshots().map(recordFromSnapshot).sort(compareSnapshots);
   return {
     generatedAt: new Date().toISOString(),
     source: 'nohub packages/ 目录快照',
-    count: sorted.length,
-    packages: sorted,
+    count: records.length,
+    packages: records,
+  };
+}
+
+/**
+ * gh-pages 快照清单：只带定位信息，前端 fetch 后再解析各份 package.noml。
+ * 发布到 gh-pages 的 data/index.noml。
+ */
+function buildManifest() {
+  const snapshots = scanSnapshots().map(({ pkgDir, host, owner, repo, repoVersion, pkg }) => {
+    const version = pkg.version ?? repoVersion;
+    return {
+      name: pkg.name ?? pkgDir,
+      version,
+      tag: resolveTag(pkg, version),
+      host,
+      owner,
+      repo,
+      repo_version: repoVersion,
+      snapshot: `packages/${pkgDir}/${host}/${owner}/${repo}/${repoVersion}/package.noml`,
+      latest: `packages/${pkgDir}/${host}/${owner}/${repo}/latest.noml`,
+    };
+  });
+
+  snapshots.sort((a, b) => {
+    const byName = a.name.localeCompare(b.name);
+    if (byName !== 0) return byName;
+    const byRepo = `${a.host}/${a.owner}/${a.repo}`.localeCompare(`${b.host}/${b.owner}/${b.repo}`);
+    if (byRepo !== 0) return byRepo;
+    return compareVersions(b.repo_version, a.repo_version);
+  });
+
+  return {
+    generated_at: new Date().toISOString(),
+    source: 'nohub packages/ 目录快照',
+    snapshots,
   };
 }
 
@@ -282,8 +334,13 @@ const index = buildIndex();
 const banner = `// 由 web/build.mjs 自动生成，请勿手动修改。\n// 重新生成：node web/build.mjs\n`;
 fs.writeFileSync(OUT_FILE, `${banner}window.NOHUB_INDEX = ${JSON.stringify(index, null, 2)};\n`);
 
+const manifest = buildManifest();
+const manifestBanner = '; 由 web/build.mjs 自动生成，请勿手动修改。\n; 重新生成：node web/build.mjs\n';
+fs.writeFileSync(MANIFEST_FILE, manifestBanner + stringifyNoml(manifest) + '\n');
+
 console.log(`✓ 索引已生成：${path.relative(ROOT, OUT_FILE)}`);
 console.log(`  共 ${index.count} 个包，扫描快照 ${walk(PACKAGES_DIR).length} 份`);
 for (const r of index.packages) {
   console.log(`  - ${r.name}@${r.host}/${r.owner}/${r.repo} ${r.repoVersion} (tag ${r.tag})`);
 }
+console.log(`✓ 快照清单已生成：${path.relative(ROOT, MANIFEST_FILE)}（${manifest.snapshots.length} 份）`);

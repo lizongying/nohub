@@ -69,11 +69,13 @@
     <div class="wrap footer-inner">
       <span id="footerSource"></span>
       <span class="footer-sep">·</span>
-      <span>索引由 <code>web/build.mjs</code> 从 <code>packages/</code> 快照生成</span>
+      <span>索引由 <code>web/build.mjs</code> 从 <code>packages/</code> 快照生成；线上读取根级 <code>latest.noml</code> / <code>packages/</code> 等 noml</span>
     </div>
   </footer>
 
+  <!-- data.js 仅本地预览注入；gh-pages 不发布它，app.js 会走 fetch + noml 解析 -->
   <script src="data.js"></script>
+  <script src="noml.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
