@@ -326,6 +326,9 @@
       return '<span class="tag">' + highlight(k, tokens) + '</span>';
     }).join('');
 
+    // 快照对应的 release 地址（如 https://github.com/lizongying/nolang/releases/tag/v0.4.28）
+    var releaseUrl = repoUrlOf(p) ? repoUrlOf(p) + '/releases/tag/' + p.repoVersion : '';
+
     // 版本列表（同一包的全部快照版本，可点击进入）
     var group = GROUPS[state.groupKey];
     var versions = group ? group.versions : [p];
@@ -399,7 +402,11 @@
           '</div>' +
           '<div class="detail-section">' +
             '<h3 class="detail-section-title">快照</h3>' +
-            '<div class="snapshot-path">' + escapeHtml(p.snapshotPath) + '</div>' +
+            '<div class="snapshot-path">' +
+              (releaseUrl
+                ? '<a class="inline-link" href="' + escapeHtml(releaseUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(releaseUrl) + '</a>'
+                : escapeHtml(p.snapshotPath)) +
+            '</div>' +
             '<dl class="kv" style="margin-top:10px">' +
               kvRow('commit', escapeHtml(p.latestCommit || ''), true) +
             '</dl>' +
