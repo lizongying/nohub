@@ -360,7 +360,10 @@
           '<div class="install-note">' +
             '<p class="install-note-text">如果还没有 <code>no</code>，需要先安装：一键安装（macOS / Linux / Windows Git Bash）会自动下载最新的 <code>no</code> 到 <code>$HOME/.local/bin</code>。</p>' +
             '<div class="install-cmd">' +
-              '<button class="copy-btn install-cmd-btn" type="button" data-cmd="' + escapeHtml(NO_INSTALL_CMD) + '">' + escapeHtml(NO_INSTALL_CMD) + '</button>' +
+              '<button class="copy-btn install-cmd-btn" type="button" data-cmd="' + escapeHtml(NO_INSTALL_CMD) + '">' +
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
+                '<span class="install-cmd-text">' + escapeHtml(NO_INSTALL_CMD) + '</span>' +
+              '</button>' +
             '</div>' +
           '</div>' +
           '<div class="detail-links-btns">' +
