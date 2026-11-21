@@ -367,10 +367,13 @@
             '</button>' +
           '</div>' +
           '<div class="detail-badges">' +
-            '<span class="badge">' + escapeHtml(p.repoVersion) + '</span>' +
             (p.category ? '<span class="badge green">' + escapeHtml(p.category) + '</span>' : '') +
           '</div>' +
           (p.description ? '<p class="detail-desc">' + highlight(p.description, tokens) + '</p>' : '') +
+          '<div class="detail-versions">' +
+            '<div class="detail-section-title">版本</div>' +
+            '<div class="ver-list">' + verChips + '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="detail-links">' +
           '<div class="install-note">' +
@@ -392,7 +395,7 @@
             '<h3 class="detail-section-title">基本信息</h3>' +
             '<dl class="kv">' +
               kvRow('包名', escapeHtml(p.name), true) +
-              '<dt>版本</dt><dd><div class="ver-list">' + verChips + '</div></dd>' +
+              kvRow('版本', escapeHtml(p.repoVersion), true) +
               kvRow('仓库', repoUrlOf(p)
                 ? '<a class="inline-link" href="' + escapeHtml(repoUrlOf(p)) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(repoUrlOf(p)) + '</a>'
                 : '') +
