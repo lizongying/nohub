@@ -1,6 +1,6 @@
 # nohub noml 格式规范
 
-本文件定义 nohub 使用的 noml 格式。目标是：**用户提交一个 GitHub repo，nohub 自动同步该 repo 的 `workspace.noml` 与 `package.noml`，按仓库版本留存清单快照**。源码仍留在各自独立 repo，nohub 只保存清单快照；面向用户的搜索/预览/文档入口由 `no` CLI 直接扫描 `packages/**/package.noml` 快照构建索引提供，nohub 自身只做同步。
+本文件定义 nohub 使用的 noml 格式。目标是：**用户提交一个 GitHub repo，nohub 自动同步该 repo 的 `workspace.noml` 与 `package.noml`，按仓库版本留存清单快照**。源码仍留在各自独立 repo，nohub 只保存清单快照；面向用户的搜索/预览/文档入口由 `no` CLI 读取站点根级 `index.noml`（与 gh-pages 搜索页首屏同一份数据）提供，nohub 自身只做同步。
 
 noml 不是新造格式，它复用 Nolang 工具链（`no`）的配置格式：`package.noml` / `workspace.noml` 本身就被 `no build` / `no run` 消费。nohub 与 `no` 读同一份文件，因此社区仓库不需要为 nohub 维护额外清单。
 
@@ -209,7 +209,7 @@ noml 是 Nolang 字面量语法，不是 JSON、也不是 TOML。规则如下：
 | `status` | str | 否 | `active` / `paused`，缺省 `active` |
 | `sync` | obj | 否 | `schedule` 与 `timezone`，缺省 `daily` / `Asia/Shanghai` |
 
-作者文件只声明「同步哪些仓库、怎么同步」，是**作者可写**的；同步状态（`last_sync_at`、`last_sync_status`、`last_sync_error`）与包索引由 nohub 内部维护，不回写作者文件，作者也无权修改。只有作者本人能创建、修改、删除这份文件，规则见第 6 节。
+作者文件只声明「同步哪些仓库、怎么同步」，是**作者可写**的；同步状态（`last-sync-at`、`last-sync-status`、`last-sync-error`）与包索引由 nohub 内部维护，不回写作者文件，作者也无权修改。只有作者本人能创建、修改、删除这份文件，规则见第 6 节。
 
 ---
 
@@ -379,10 +379,10 @@ node bin/nohub.mjs sync --root <dir>           # 指向另一个实例仓库
 ```noml
 {
   'github.com/lizongying/nolang': {
-    last_sync_at: '2026-11-20T08:00:00.000Z'
-    last_sync_status: 'ok'
-    last_sync_error: nil
-    repo_version: 'v0.4.28'
+    last-sync-at: '2026-11-20T08:00:00.000Z'
+    last-sync-status: 'ok'
+    last-sync-error: nil
+    repo-version: 'v0.4.28'
     commit: '49ab71ed60ae719418f2351986be71748fa843fe'
     branch: 'main'
     versions: ['v0.1.0', 'v0.2.0', 'v0.4.27', 'v0.4.28']
@@ -395,7 +395,7 @@ node bin/nohub.mjs sync --root <dir>           # 指向另一个实例仓库
 }
 ```
 
-`last_sync_status` 取值 `ok` / `partial` / `error` / `skipped`；`skipped` 列出被跳过的包及原因。
+`last-sync-status` 取值 `ok` / `partial` / `error` / `skipped`；`skipped` 列出被跳过的包及原因。
 
 ### 6.7 仓库地址解析
 
@@ -502,7 +502,7 @@ packages/glossary/github.com/lizongying/nolang/latest.noml
 
 ## 9. 索引输出
 
-nohub 同步产出的是 `packages/**/package.noml` 快照与 `latest.noml`；`no search` / `no info` / `no docs` 直接扫描这些清单、各自构建索引（字段映射与 `web/build.mjs` 一致），nohub 自身不提供 CLI 检索命令。gh-pages 静态搜索页不扫源仓库，而是 fetch 同步工作流发布到分支根级的 noml 数据（见 9.1）。每条记录包含：
+nohub 同步产出的是 `packages/**/package.noml` 快照与 `latest.noml`，`web/build.mjs` 再生成根级 `index.noml`（每包一条最新版本，只带首页列表所需字段）。`no search` / `no info` / `no docs` 与 gh-pages 静态搜索页首屏都 fetch 这份根级 `index.noml` 建索引，点击详情/切换历史版本时才按需读 `packages/**/package.noml`；nohub 自身不提供 CLI 检索命令。每条记录包含：
 
 | 字段 | 来源 |
 | --- | --- |
@@ -526,27 +526,27 @@ nohub 同步产出的是 `packages/**/package.noml` 快照与 `latest.noml`；`n
 
 ### 9.1 gh-pages 数据布局与前端解析
 
-`web/build.mjs` 除了 `web/data.js`（本地预览注入），还生成一份快照清单 `web/index.noml`：枚举全部 `packages/<name>/<host>/<owner>/<repo>/<repo_version>/package.noml` 与包级 `latest.noml`。工作流把它和同步产出的 `packages/`、`workspaces/`、`latest.noml` 一起发布到 gh-pages 根级：
+`web/build.mjs` 除 `web/data.js`（本地预览注入）外，还生成根级首页清单 `web/index.noml`：按 `name@host/owner/repo` 分组，每包只保留仓库版本最高的一条，字段为首页列表/搜索所需（`name` / `tag` / `repo` / `version` / `description` / `keywords` / `category` / `license` / `author` / `email` / `repository` / `publish`）。其中 `repo` 是合成字段 `host/owner/repo`，`version` 即仓库版本（不再单列 `repo_version`、`snapshot`、`host`、`owner`）。工作流把它和同步产出的 `packages/`、`workspaces/`、`latest.noml` 一起发布到 gh-pages 根级：
 
 ```
 index.html  app.js  styles.css  noml.js
-index.noml                  # 快照清单：snapshots[] 逐条列出 snapshot / latest 相对路径
+index.noml                  # 首页清单：packages[] 每包一条最新版本，只带列表字段
 latest.noml                 # 根清单：['name:version@host/owner/repo', ...]
 packages/<name>/<host>/<owner>/<repo>/
-  latest.noml
+  latest.noml               # 版本索引：version / commit / versions[]（升序）
   <repo_version>/package.noml
 workspaces/<host>/<owner>/<repo>/<repo_version>/workspace.noml
 ```
 
-页面加载流程：
+页面（以及 `no` CLI）加载流程：
 
-1. `app.js` 先 `fetch('index.noml')` 取清单（本地预览由注入的 `data.js` 直接提供同结构索引，跳过 fetch）。
-2. 再 `fetch('latest.noml')` 取根清单，得到每个仓库分组默认展示的版本（`latest.noml` 缺失时退回版本最高者）。
-3. 按清单逐份 `fetch('<snapshot>')` 与 `fetch('<latest>')`，交给 `web/noml.js` 暴露的 `window.NOML.parse` 解析（与 `lib/noml.mjs` 同一份语法实现），映射成与上表一致的记录后渲染。
+1. 首屏只 `fetch('index.noml')`（本地预览由注入的 `data.js` 提供同结构索引，跳过 fetch），`window.NOML.parse` 解析后直接渲染列表。每条条目经 `recordFromIndexEntry` 拆出 `host/owner/repo`、标记 `listOnly`。
+2. 点击卡片时才延迟 `fetch('packages/<name>/<repo>/latest.noml')` 取版本索引（用于版本切换）与 `fetch('.../<version>/package.noml')` 取完整详情（docs / homepage / organization / dependencies 等首屏没有的字段）。
+3. 切换历史版本时再按需 `fetch('<snapshot>')`，交给 `web/noml.js` 的 `window.NOML.parse` 解析（与 `lib/noml.mjs` 同一语法实现）。
 
-清单里每个仓库版本的快照各占一条，因此页面上的版本切换覆盖该仓库的全部历史 tag，而不只是最新版本。
+`no` 与首屏走同一条路径：默认 source 为 `https://lizongying.github.io/nohub`，只 fetch `<source>/index.noml`，字段映射与 `recordFromIndexEntry` 一致；多实例在 `~/no/sources.noml` 配置（见 README〈实例与多源〉）。
 
-`data.js` 不发布到 gh-pages，因此线上页面始终走 fetch + noml 解析路径；`packages/`、`workspaces/`、`latest.noml` 原样发布，可直接被其它工具 fetch。
+`data.js` 不发布到 gh-pages，因此线上页面与 `no` 始终走 fetch + noml 解析路径；`packages/`、`workspaces/`、`latest.noml` 原样发布，可直接被其它工具 fetch。
 
 ---
 

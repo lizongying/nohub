@@ -138,8 +138,8 @@ test('全量同步：写快照、包级 latest、根 latest 与 state', async (t
 
   // state
   const state = parseNoml(read(dir, 'state/sync.noml'));
-  assert.equal(state['github.com/lizongying/nolang'].last_sync_status, 'ok');
-  assert.equal(state['github.com/lizongying/nolang'].last_sync_at, NOW);
+  assert.equal(state['github.com/lizongying/nolang']['last-sync-status'], 'ok');
+  assert.equal(state['github.com/lizongying/nolang']['last-sync-at'], NOW);
   assert.deepEqual(state['github.com/lizongying/nolang'].packages, ['glossary', 'noui']);
 });
 

@@ -47,7 +47,8 @@ jobs:
           git push
 
       # 搜索页部署在 gh-pages 分支：页面文件 + 根级 noml 数据（packages/ workspaces/ latest.noml）。
-      # 线上页面 fetch index.noml 清单，再逐份 fetch packages/.../package.noml 解析。
+      # 线上页面首屏只 fetch index.noml（每包一条最新版本）即可渲染列表；
+      # 点击卡片后才延迟请求该包的 latest.noml（版本索引）与 package.noml（详情）。
       - name: 同步搜索页（gh-pages）
         continue-on-error: true
         run: |

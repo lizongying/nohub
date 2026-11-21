@@ -1,9 +1,9 @@
 {
   'github.com/lizongying/nolang': {
-    last_sync_at: '2026-11-21T08:42:37.614Z'
-    last_sync_status: 'ok'
-    last_sync_error: nil
-    repo_version: 'v0.4.28'
+    last-sync-at: '2026-11-21T08:42:37.614Z'
+    last-sync-status: 'ok'
+    last-sync-error: nil
+    repo-version: 'v0.4.28'
     commit: '49ab71ed60ae719418f2351986be71748fa843fe'
     branch: 'main'
     versions: [
@@ -201,10 +201,10 @@
     ]
   }
   'github.com/lizongying/notools': {
-    last_sync_at: '2026-11-21T08:42:37.614Z'
-    last_sync_status: 'ok'
-    last_sync_error: nil
-    repo_version: 'v0.1.35'
+    last-sync-at: '2026-11-21T08:42:37.614Z'
+    last-sync-status: 'ok'
+    last-sync-error: nil
+    repo-version: 'v0.1.35'
     commit: 'b0716f55c2ab23e52f4899a90f77d8dfcd2b298e'
     branch: 'main'
     versions: [

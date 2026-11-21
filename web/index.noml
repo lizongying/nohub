@@ -1,855 +1,205 @@
 ; 由 web/build.mjs 自动生成，请勿手动修改。
 ; 重新生成：node web/build.mjs
 {
-  generated_at: '2026-11-21T09:51:31.874Z'
+  generated-at: '2026-11-21T12:56:18.747Z'
   source: 'nohub packages/ 目录快照'
-  snapshots: [
+  packages: [
     {
       name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.28'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.27'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.26'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.26/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.25'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.25/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.24'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.24/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.23'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.23/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.22'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.22/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.21'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.21/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'glossary'
-      version: 'v0.1.0'
-      tag: 'v0.1.0'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.20'
-      snapshot: 'packages/glossary/github.com/lizongying/nolang/v0.4.20/package.noml'
-      latest: 'packages/glossary/github.com/lizongying/nolang/latest.noml'
+      tag: 'v0.4.28'
+      repo: 'github.com/lizongying/nolang'
+      version: 'v0.4.28'
+      description: 'Nolang 词条化知识库：类型、注解、关键字、语法构造、std 模块与陷阱的 CLI + MCP 检索前端'
+      keywords: [
+        'nolang',
+        'glossary',
+        'mcp',
+        'knowledge-base',
+      ]
+      category: ''
+      license: 'Apache-2.0'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'https://github.com/lizongying/nolang'
+      publish: true
     },
     {
       name: 'noagent'
-      version: 'v0.1.35'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.35'
-      snapshot: 'packages/noagent/github.com/lizongying/notools/v0.1.35/package.noml'
-      latest: 'packages/noagent/github.com/lizongying/notools/latest.noml'
-    },
-    {
-      name: 'noagent'
-      version: 'v0.1.34'
-      tag: 'v0.1.34'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.34'
-      snapshot: 'packages/noagent/github.com/lizongying/notools/v0.1.34/package.noml'
-      latest: 'packages/noagent/github.com/lizongying/notools/latest.noml'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang autonomous LLM agent CLI (OpenAI-compatible chat completions, tool-calling loop, SSE streaming, sessions)'
+      keywords: [
+        'llm',
+        'agent',
+        'cli',
+        'openai',
+        'chat-completions',
+        'tool-calling',
+        'sse',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
     },
     {
       name: 'nogit'
-      version: 'v0.1.35'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.35'
-      snapshot: 'packages/nogit/github.com/lizongying/notools/v0.1.35/package.noml'
-      latest: 'packages/nogit/github.com/lizongying/notools/latest.noml'
-    },
-    {
-      name: 'nogit'
-      version: 'v0.1.34'
-      tag: 'v0.1.34'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.34'
-      snapshot: 'packages/nogit/github.com/lizongying/notools/v0.1.34/package.noml'
-      latest: 'packages/nogit/github.com/lizongying/notools/latest.noml'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of Git (no system git binary)'
+      keywords: []
+      category: ''
+      license: 'MIT'
+      author: '李宗英'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
     },
     {
       name: 'noimg'
-      version: 'v0.1.35'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.35'
-      snapshot: 'packages/noimg/github.com/lizongying/notools/v0.1.35/package.noml'
-      latest: 'packages/noimg/github.com/lizongying/notools/latest.noml'
-    },
-    {
-      name: 'noimg'
-      version: 'v0.1.34'
-      tag: 'v0.1.34'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.34'
-      snapshot: 'packages/noimg/github.com/lizongying/notools/v0.1.34/package.noml'
-      latest: 'packages/noimg/github.com/lizongying/notools/latest.noml'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang image processing library (libvips-style)'
+      keywords: []
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
     },
     {
       name: 'nojq'
-      version: 'v0.1.35'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.35'
-      snapshot: 'packages/nojq/github.com/lizongying/notools/v0.1.35/package.noml'
-      latest: 'packages/nojq/github.com/lizongying/notools/latest.noml'
-    },
-    {
-      name: 'nojq'
-      version: 'v0.1.34'
-      tag: 'v0.1.34'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.34'
-      snapshot: 'packages/nojq/github.com/lizongying/notools/v0.1.34/package.noml'
-      latest: 'packages/nojq/github.com/lizongying/notools/latest.noml'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of jq (1.7 compatible)'
+      keywords: [
+        'jq',
+        'json',
+        'query',
+      ]
+      category: ''
+      license: 'MIT'
+      author: '李宗英'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
     },
     {
       name: 'nonpm'
-      version: 'v0.1.35'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.35'
-      snapshot: 'packages/nonpm/github.com/lizongying/notools/v0.1.35/package.noml'
-      latest: 'packages/nonpm/github.com/lizongying/notools/latest.noml'
-    },
-    {
-      name: 'nonpm'
-      version: 'v0.1.34'
-      tag: 'v0.1.34'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.34'
-      snapshot: 'packages/nonpm/github.com/lizongying/notools/v0.1.34/package.noml'
-      latest: 'packages/nonpm/github.com/lizongying/notools/latest.noml'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of pnpm (fast, disk-efficient package manager)'
+      keywords: [
+        'pnpm',
+        'npm',
+        'package-manager',
+        'node',
+        'javascript',
+        'monorepo',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
     },
     {
       name: 'notools'
-      version: 'v0.1.35'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.35'
-      snapshot: 'packages/notools/github.com/lizongying/notools/v0.1.35/package.noml'
-      latest: 'packages/notools/github.com/lizongying/notools/latest.noml'
-    },
-    {
-      name: 'notools'
-      version: 'v0.1.34'
-      tag: 'v0.1.34'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.34'
-      snapshot: 'packages/notools/github.com/lizongying/notools/v0.1.34/package.noml'
-      latest: 'packages/notools/github.com/lizongying/notools/latest.noml'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Unix utilities implemented in Nolang'
+      keywords: [
+        'cli',
+        'utilities',
+        'ls',
+        'cat',
+        'rm',
+        'tree',
+        'mv',
+        'touch',
+        'echo',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
     },
     {
       name: 'nouv'
-      version: 'v0.1.35'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.35'
-      snapshot: 'packages/nouv/github.com/lizongying/notools/v0.1.35/package.noml'
-      latest: 'packages/nouv/github.com/lizongying/notools/latest.noml'
-    },
-    {
-      name: 'nouv'
-      version: 'v0.1.34'
-      tag: 'v0.1.34'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
-      repo_version: 'v0.1.34'
-      snapshot: 'packages/nouv/github.com/lizongying/notools/v0.1.34/package.noml'
-      latest: 'packages/nouv/github.com/lizongying/notools/latest.noml'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of uv (Python package and project manager)'
+      keywords: [
+        'uv',
+        'python',
+        'package-manager',
+        'venv',
+        'pip',
+        'pyproject',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
     },
     {
       name: 'test'
-      version: 'v0.4.28'
       tag: 'v0.4.28'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.28'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.28/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.27'
-      tag: 'v0.4.27'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.27'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.27/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.26'
-      tag: 'v0.4.26'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.26'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.26/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.25'
-      tag: 'v0.4.25'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.25'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.25/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.24'
-      tag: 'v0.4.24'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.24'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.24/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.23'
-      tag: 'v0.4.23'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.23'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.23/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.22'
-      tag: 'v0.4.22'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.22'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.22/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.21'
-      tag: 'v0.4.21'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.21'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.21/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.20'
-      tag: 'v0.4.20'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.20'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.20/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.19'
-      tag: 'v0.4.19'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.19'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.19/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.18'
-      tag: 'v0.4.18'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.18'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.18/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.17'
-      tag: 'v0.4.17'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.17'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.17/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.16'
-      tag: 'v0.4.16'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.16'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.16/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.15'
-      tag: 'v0.4.15'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.15'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.15/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.14'
-      tag: 'v0.4.14'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.14'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.14/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.13'
-      tag: 'v0.4.13'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.13'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.13/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.12'
-      tag: 'v0.4.12'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.12'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.12/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test'
-      version: 'v0.4.11'
-      tag: 'v0.4.11'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.11'
-      snapshot: 'packages/test/github.com/lizongying/nolang/v0.4.11/package.noml'
-      latest: 'packages/test/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
+      repo: 'github.com/lizongying/nolang'
       version: 'v0.4.28'
+      description: 'A new Nolang project'
+      keywords: [
+        'nolang',
+      ]
+      category: ''
+      license: 'Apache-2.0'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'https://github.com/lizongying/nolang'
+      publish: true
+    },
+    {
+      name: 'test1'
       tag: 'v0.4.28'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.28'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.28/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.27'
-      tag: 'v0.4.27'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.27'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.27/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.26'
-      tag: 'v0.4.26'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.26'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.26/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.25'
-      tag: 'v0.4.25'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.25'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.25/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.24'
-      tag: 'v0.4.24'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.24'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.24/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.23'
-      tag: 'v0.4.23'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.23'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.23/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.22'
-      tag: 'v0.4.22'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.22'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.22/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.21'
-      tag: 'v0.4.21'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.21'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.21/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.20'
-      tag: 'v0.4.20'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.20'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.20/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.19'
-      tag: 'v0.4.19'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.19'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.19/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.18'
-      tag: 'v0.4.18'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.18'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.18/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.17'
-      tag: 'v0.4.17'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.17'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.17/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.16'
-      tag: 'v0.4.16'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.16'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.16/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.15'
-      tag: 'v0.4.15'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.15'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.15/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.14'
-      tag: 'v0.4.14'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.14'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.14/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.13'
-      tag: 'v0.4.13'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.13'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.13/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.12'
-      tag: 'v0.4.12'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.12'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.12/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test1'
-      version: 'v0.4.11'
-      tag: 'v0.4.11'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.11'
-      snapshot: 'packages/test1/github.com/lizongying/nolang/v0.4.11/package.noml'
-      latest: 'packages/test1/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
+      repo: 'github.com/lizongying/nolang'
       version: 'v0.4.28'
+      description: ''
+      keywords: []
+      category: ''
+      license: ''
+      author: ''
+      email: ''
+      repository: ''
+      publish: true
+    },
+    {
+      name: 'test2'
       tag: 'v0.4.28'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.28'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.28/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.27'
-      tag: 'v0.4.27'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.27'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.27/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.26'
-      tag: 'v0.4.26'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.26'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.26/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.25'
-      tag: 'v0.4.25'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.25'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.25/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.24'
-      tag: 'v0.4.24'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.24'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.24/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.23'
-      tag: 'v0.4.23'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.23'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.23/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.22'
-      tag: 'v0.4.22'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.22'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.22/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.21'
-      tag: 'v0.4.21'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.21'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.21/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.20'
-      tag: 'v0.4.20'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.20'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.20/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.19'
-      tag: 'v0.4.19'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.19'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.19/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.18'
-      tag: 'v0.4.18'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.18'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.18/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.17'
-      tag: 'v0.4.17'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.17'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.17/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.16'
-      tag: 'v0.4.16'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.16'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.16/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.15'
-      tag: 'v0.4.15'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.15'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.15/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.14'
-      tag: 'v0.4.14'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.14'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.14/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.13'
-      tag: 'v0.4.13'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.13'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.13/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.12'
-      tag: 'v0.4.12'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.12'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.12/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
-    },
-    {
-      name: 'test2'
-      version: 'v0.4.11'
-      tag: 'v0.4.11'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
-      repo_version: 'v0.4.11'
-      snapshot: 'packages/test2/github.com/lizongying/nolang/v0.4.11/package.noml'
-      latest: 'packages/test2/github.com/lizongying/nolang/latest.noml'
+      repo: 'github.com/lizongying/nolang'
+      version: 'v0.4.28'
+      description: 'A new Nolang project'
+      keywords: []
+      category: ''
+      license: 'Apache-2.0'
+      author: ''
+      email: ''
+      repository: ''
+      publish: true
     },
   ]
 }

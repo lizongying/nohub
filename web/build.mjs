@@ -5,8 +5,9 @@
  * 扫描仓库 packages/ 目录下的版本快照：
  *   packages/<pkg>/<host>/<owner>/<repo>/<repo_version>/package.noml
  * 以及同级的 latest.noml（含 version / commit），解析 noml 清单后生成：
- *   - web/data.js    ：预编译索引（window.NOHUB_INDEX），本地预览用
- *   - web/index.noml ：快照清单（gh-pages 发布到 data/，前端 fetch 后解析）
+ *   - web/data.js    ：预编译索引（window.NOHUB_INDEX），本地预览用（含全部版本）
+ *   - web/index.noml ：首页清单（gh-pages 发布到根级，前端 fetch 后直接渲染列表；
+ *                      每包一条最新版本，只带列表所需字段，详情延迟请求）
  *
  * 用法：node web/build.mjs
  */
@@ -296,37 +297,50 @@ function buildIndex() {
 }
 
 /**
- * gh-pages 快照清单：只带定位信息，前端 fetch 后再解析各份 package.noml。
- * 发布到 gh-pages 的 data/index.noml。
+ * gh-pages 首页清单：每包只保留最新仓库版本一条，只带首页列表/搜索所需字段。
+ * 前端 fetch 后即可直接渲染列表，详情与历史版本再延迟请求。
+ * 发布到 gh-pages 的 index.noml。
  */
 function buildManifest() {
-  const snapshots = scanSnapshots().map(({ pkgDir, host, owner, repo, repoVersion, pkg }) => {
-    const version = pkg.version ?? repoVersion;
-    return {
-      name: pkg.name ?? pkgDir,
-      version,
-      tag: resolveTag(pkg, version),
-      host,
-      owner,
-      repo,
-      repo_version: repoVersion,
-      snapshot: `packages/${pkgDir}/${host}/${owner}/${repo}/${repoVersion}/package.noml`,
-      latest: `packages/${pkgDir}/${host}/${owner}/${repo}/latest.noml`,
-    };
-  });
+  const snapshots = scanSnapshots();
 
-  snapshots.sort((a, b) => {
+  // 按 包名@host/owner/repo 分组，取仓库版本最大者作为该包的首页条目
+  const byKey = new Map();
+  for (const s of snapshots) {
+    const name = s.pkg.name ?? s.pkgDir;
+    const key = `${name}@${s.host}/${s.owner}/${s.repo}`;
+    const prev = byKey.get(key);
+    if (!prev || compareVersions(s.repoVersion, prev.repoVersion) > 0) byKey.set(key, s);
+  }
+
+  const packages = [...byKey.values()].map(({ pkgDir, host, owner, repo, repoVersion, pkg }) => ({
+    name: pkg.name ?? pkgDir,
+    // tag 用仓库 tag（如 v0.4.28），不再取包自报的 version
+    tag: resolveTag(pkg, repoVersion),
+    // 仓库定位信息合成一个 repo 字段：host/owner/repo
+    repo: `${host}/${owner}/${repo}`,
+    // version 即仓库版本（repo_version）
+    version: repoVersion,
+    description: pkg.description ?? '',
+    keywords: stringArray(pkg.keywords),
+    category: pkg.category ?? '',
+    license: pkg.license ?? '',
+    author: pkg.author ?? '',
+    email: pkg.email ?? '',
+    repository: pkg.repository ?? '',
+    publish: pkg.publish !== false,
+  }));
+
+  packages.sort((a, b) => {
     const byName = a.name.localeCompare(b.name);
     if (byName !== 0) return byName;
-    const byRepo = `${a.host}/${a.owner}/${a.repo}`.localeCompare(`${b.host}/${b.owner}/${b.repo}`);
-    if (byRepo !== 0) return byRepo;
-    return compareVersions(b.repo_version, a.repo_version);
+    return a.repo.localeCompare(b.repo);
   });
 
   return {
-    generated_at: new Date().toISOString(),
+    'generated-at': new Date().toISOString(),
     source: 'nohub packages/ 目录快照',
-    snapshots,
+    packages,
   };
 }
 
@@ -343,4 +357,4 @@ console.log(`  共 ${index.count} 个包，扫描快照 ${walk(PACKAGES_DIR).len
 for (const r of index.packages) {
   console.log(`  - ${r.name}@${r.host}/${r.owner}/${r.repo} ${r.repoVersion} (tag ${r.tag})`);
 }
-console.log(`✓ 快照清单已生成：${path.relative(ROOT, MANIFEST_FILE)}（${manifest.snapshots.length} 份）`);
+console.log(`✓ 首页清单已生成：${path.relative(ROOT, MANIFEST_FILE)}（${manifest.packages.length} 个包）`);

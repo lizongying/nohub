@@ -6,7 +6,7 @@ nohub 是一个面向社区第三方库的**元数据注册中心（metadata reg
 
 nohub 同时也是**一套 registry 规范 + 一个参考实现**：规范定义 noml 格式与同步/索引协议，参考实现部署在 `lizongying/nohub` 作为公共实例。任何人都可以自建结构一致的私有实例。
 
-**nohub 自身只做同步**——它不提供 `search` / `info` / `docs` 命令。面向用户的检索、预览与文档入口已经集成到 Nolang 工具链 `no` 里：`no search <query>`、`no info <pkg>`、`no docs <pkg>` 直接从 nohub 仓库的 `packages/**/package.noml` 清单快照构建索引，`no` 客户端把多个实例作为源叠加检索。详见 [与 `no` CLI 的关系](#与-no-cli-的关系)。
+**nohub 自身只做同步**——它不提供 `search` / `info` / `docs` 命令。面向用户的检索、预览与文档入口已经集成到 Nolang 工具链 `no` 里：`no search <query>`、`no info <pkg>`、`no docs <pkg>` 直接读取 nohub 站点根级的 `index.noml`（与搜索页首屏同一份数据），`no` 客户端把多个实例作为源叠加检索。详见 [与 `no` CLI 的关系](#与-no-cli-的关系)。
 
 完整的格式规范见 [`docs/noml-format.md`](docs/noml-format.md)，样例见 [`examples/`](examples/)。
 
@@ -43,7 +43,7 @@ flowchart LR
     WEB --> A
 ```
 
-数据流很轻：用户提交一个 GitHub repo，准入通过后生成收录记录；同步任务（CRUD 后即时触发，外加每日兜底）按记录拉取该 repo 的 `workspace.noml` 与各个 `package.noml`，解析、校验后写入版本快照。检索侧不在 nohub：`no search/info/docs` 直接扫描 `packages/` 清单快照自建索引；gh-pages 静态搜索页则 fetch 工作流发布到分支根级的 noml 清单与快照，在浏览器里解析建索引（见 `docs/noml-format.md` 9.1）。两者都回跳原始仓库；`no add` / `no install` 直接指向仓库的 release。源码本身从不经过 nohub。
+数据流很轻：用户提交一个 GitHub repo，准入通过后生成收录记录；同步任务（CRUD 后即时触发，外加每日兜底）按记录拉取该 repo 的 `workspace.noml` 与各个 `package.noml`，解析、校验后写入版本快照，`web/build.mjs` 再据此生成根级 `index.noml`（每包一条最新版本，只带列表字段）。检索侧不在 nohub：`no search/info/docs` 与 gh-pages 静态搜索页首屏都 fetch 同一份 `index.noml` 解析建索引（见 `docs/noml-format.md` 9.1），详情才按需读取各包的 `package.noml`。两者都回跳原始仓库；`no add` / `no install` 直接指向仓库的 release。源码本身从不经过 nohub。
 
 ---
 
@@ -56,18 +56,18 @@ nohub 不是唯一的官方单点。规范约束的是**结构与协议**，不�
 - **实例隔离**：权限、审核、包可见性由每个实例自己管控；实例之间不互相同步作者记录或索引，也不共享用户与权限。A 实例的私有包不会出现在 B 实例。
 - **多源客户端**：`no` 客户端维护一个源列表，每个源指向一个 nohub 实例；搜索时叠加所有源，结果带 `SOURCE` 列标明来源实例，同名同版本的包由**靠前的源优先**解析，也可以用 `-source <name>` 只看某个源。包引用沿用 `<pkg>@<host>/<owner>/<repo>`。
 
-源列表落在客户端 `~/no/sources.noml`（noml 格式，数组顺序即优先级），每项就是一个 nohub 仓库地址 `<host>/<owner>/<repo>`（可写 `'名字 = 仓库地址'` 起别名，也可用本地 checkout 目录）：
+源列表落在客户端 `~/no/sources.noml`（noml 格式，数组顺序即优先级），每项就是一个 nohub 站点的 gh-pages 地址（可写 `'名字 = 地址'` 起别名，也可用本地 checkout 目录）：
 
 ```
 {
   sources: [
-    'github.com/lizongying/nohub',
-    'corp = github.com/acme/nohub',
+    'https://lizongying.github.io/nohub',
+    'corp = https://corp.example/nohub',
   ]
 }
 ```
 
-不配置时默认 `github.com/lizongying/nohub`；临时切换用 `NOHUB_SOURCES`（逗号分隔，覆盖配置文件）。某个源拉取失败只会告警，其余源照常返回结果。`no` 对每个源拉取仓库 tarball，扫描 `packages/**/package.noml` 与 `latest.noml` 自行建索引——与 `web/build.mjs` 用的是同一份数据，不读取生成的 `data.js`。
+不配置时默认 `https://lizongying.github.io/nohub`；临时切换用 `NOHUB_SOURCES`（逗号分隔，覆盖配置文件）。某个源拉取失败只会告警，其余源照常返回结果。`no` 对每个源只 fetch 根级 `index.noml`（`<地址>/index.noml`，与搜索页首屏同一份数据），不下载 tarball、不读取生成的 `data.js`。
 
 同一个 `repos/<host>/<owner>.noml` 可以同时存在于公共实例和某个私有实例，两者互不相干；作者在不同实例上是各自独立的收录记录。
 
@@ -196,13 +196,13 @@ tag 无法解析只告警、不拒绝写入：只有显式声明了 `tag_pattern
 
 ## 与 `no` CLI 的关系
 
-nohub 只做清单同步，不提供面向用户的检索命令。搜索、预览与文档入口都在 Nolang 工具链 `no` 里，三个只读命令直接扫描 nohub 仓库的 `packages/**/package.noml` 清单快照构建索引，不涉及源码托管：
+nohub 只做清单同步，不提供面向用户的检索命令。搜索、预览与文档入口都在 Nolang 工具链 `no` 里，三个只读命令读取 nohub 站点根级的 `index.noml`（与搜索页首屏同一份数据），不涉及源码托管：
 
 - **`no search <query>`** —— 按包名、关键词、分类检索，返回包名、描述、当前版本、仓库地址。
-- **`no info <pkg>`** —— 展示包的元数据摘要（名称、版本、许可证、关键词、作者、commit），并给出安装/导入命令与文档地址。
+- **`no info <pkg>`** —— 展示包的元数据摘要（名称、版本、许可证、关键词、作者），并给出安装/导入命令与文档地址。
 - **`no docs <pkg>`** —— 打印文档 URL：优先取 `docs`，回退 `homepage`，再回退 `repository`；nohub 不缓存、不渲染文档内容。
 
-`no` 默认读取公共仓库 `github.com/lizongying/nohub`。要叠加多个实例，在 `~/no/sources.noml` 配置仓库地址列表（见〈实例与多源〉）；`NOHUB_SOURCES` 可临时覆盖。三个命令都接受 `-source <name>` 只看指定源；`no search` 的输出带 `SOURCE` 列。gh-pages 上的静态搜索页是从同一份 `packages/` 清单构建的另一个视图。
+`no` 默认读取公共站点 `https://lizongying.github.io/nohub`。要叠加多个实例，在 `~/no/sources.noml` 配置站点地址列表（见〈实例与多源〉）；`NOHUB_SOURCES` 可临时覆盖。三个命令都接受 `-source <name>` 只看指定源；`no search` 的输出带 `SOURCE` 列。gh-pages 上的静态搜索页与 `no` 首屏读取的是同一份根级 `index.noml`。
 
 三个命令的共同原则是「**指向而非托管**」：用户找到包后，再跳转到它真正的仓库与文档，或用 `no add` / `no install` 导入。
 
