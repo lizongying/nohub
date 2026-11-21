@@ -828,7 +828,7 @@
         var entries = manifest && Array.isArray(manifest.packages) ? manifest.packages : [];
         var packages = entries.map(recordFromIndexEntry);
         return {
-          generatedAt: manifest && manifest.generated_at ? manifest.generated_at : '',
+          generatedAt: manifest && manifest['generated-at'] ? manifest['generated-at'] : '',
           source: (manifest && manifest.source) || 'nohub gh-pages noml 数据',
           count: packages.length,
           packages: packages,
