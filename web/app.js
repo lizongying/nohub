@@ -360,8 +360,8 @@
           '<div class="install-note">' +
             '<p class="install-note-text">如果还没有 <code>no</code>，需要先安装：一键安装（macOS / Linux / Windows Git Bash）会自动下载最新的 <code>no</code> 到 <code>$HOME/.local/bin</code>。</p>' +
             '<div class="install-cmd">' +
-              '<code>' + escapeHtml(NO_INSTALL_CMD) + '</code>' +
               copyBtn(NO_INSTALL_CMD, '复制') +
+              '<code>' + escapeHtml(NO_INSTALL_CMD) + '</code>' +
             '</div>' +
           '</div>' +
           '<div class="detail-links-btns">' +
