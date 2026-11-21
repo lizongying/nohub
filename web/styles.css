@@ -416,10 +416,52 @@ mark {
 
 .detail-links {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
   padding: 14px 22px;
   border-bottom: 1px solid var(--border);
+}
+.detail-links-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.install-note {
+  background: #f8f9fc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.install-note-text {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+.install-note-text code,
+.install-cmd code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: #eef0f6;
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--text);
+}
+.install-cmd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.install-cmd code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
 }
 .link-btn {
   display: inline-flex;
