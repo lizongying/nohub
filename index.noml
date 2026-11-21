@@ -1,0 +1,205 @@
+; 由 web/build.mjs 自动生成，请勿手动修改。
+; 重新生成：node web/build.mjs
+{
+  generated-at: '2026-11-21T12:56:18.747Z'
+  source: 'nohub packages/ 目录快照'
+  packages: [
+    {
+      name: 'glossary'
+      tag: 'v0.4.28'
+      repo: 'github.com/lizongying/nolang'
+      version: 'v0.4.28'
+      description: 'Nolang 词条化知识库：类型、注解、关键字、语法构造、std 模块与陷阱的 CLI + MCP 检索前端'
+      keywords: [
+        'nolang',
+        'glossary',
+        'mcp',
+        'knowledge-base',
+      ]
+      category: ''
+      license: 'Apache-2.0'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'https://github.com/lizongying/nolang'
+      publish: true
+    },
+    {
+      name: 'noagent'
+      tag: 'v0.1.35'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang autonomous LLM agent CLI (OpenAI-compatible chat completions, tool-calling loop, SSE streaming, sessions)'
+      keywords: [
+        'llm',
+        'agent',
+        'cli',
+        'openai',
+        'chat-completions',
+        'tool-calling',
+        'sse',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
+    },
+    {
+      name: 'nogit'
+      tag: 'v0.1.35'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of Git (no system git binary)'
+      keywords: []
+      category: ''
+      license: 'MIT'
+      author: '李宗英'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
+    },
+    {
+      name: 'noimg'
+      tag: 'v0.1.35'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang image processing library (libvips-style)'
+      keywords: []
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
+    },
+    {
+      name: 'nojq'
+      tag: 'v0.1.35'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of jq (1.7 compatible)'
+      keywords: [
+        'jq',
+        'json',
+        'query',
+      ]
+      category: ''
+      license: 'MIT'
+      author: '李宗英'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
+    },
+    {
+      name: 'nonpm'
+      tag: 'v0.1.35'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of pnpm (fast, disk-efficient package manager)'
+      keywords: [
+        'pnpm',
+        'npm',
+        'package-manager',
+        'node',
+        'javascript',
+        'monorepo',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
+    },
+    {
+      name: 'notools'
+      tag: 'v0.1.35'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Unix utilities implemented in Nolang'
+      keywords: [
+        'cli',
+        'utilities',
+        'ls',
+        'cat',
+        'rm',
+        'tree',
+        'mv',
+        'touch',
+        'echo',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
+    },
+    {
+      name: 'nouv'
+      tag: 'v0.1.35'
+      repo: 'github.com/lizongying/notools'
+      version: 'v0.1.35'
+      description: 'Pure Nolang implementation of uv (Python package and project manager)'
+      keywords: [
+        'uv',
+        'python',
+        'package-manager',
+        'venv',
+        'pip',
+        'pyproject',
+      ]
+      category: ''
+      license: 'MIT'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'git@github.com:lizongying/notools.git'
+      publish: true
+    },
+    {
+      name: 'test'
+      tag: 'v0.4.28'
+      repo: 'github.com/lizongying/nolang'
+      version: 'v0.4.28'
+      description: 'A new Nolang project'
+      keywords: [
+        'nolang',
+      ]
+      category: ''
+      license: 'Apache-2.0'
+      author: 'lizongying'
+      email: 'lizongying@msn.com'
+      repository: 'https://github.com/lizongying/nolang'
+      publish: true
+    },
+    {
+      name: 'test1'
+      tag: 'v0.4.28'
+      repo: 'github.com/lizongying/nolang'
+      version: 'v0.4.28'
+      description: ''
+      keywords: []
+      category: ''
+      license: ''
+      author: ''
+      email: ''
+      repository: ''
+      publish: true
+    },
+    {
+      name: 'test2'
+      tag: 'v0.4.28'
+      repo: 'github.com/lizongying/nolang'
+      version: 'v0.4.28'
+      description: 'A new Nolang project'
+      keywords: []
+      category: ''
+      license: 'Apache-2.0'
+      author: ''
+      email: ''
+      repository: ''
+      publish: true
+    },
+  ]
+}
