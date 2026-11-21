@@ -448,21 +448,21 @@ mark {
   color: var(--text);
 }
 .install-cmd {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   min-width: 0;
 }
-.install-cmd code {
-  flex: 1 1 auto;
-  min-width: 0;
+.install-cmd-btn {
+  width: 100%;
+  justify-content: flex-start;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: #fff;
   overflow-x: auto;
   white-space: nowrap;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 10px;
 }
+.install-cmd-btn:hover { background: #eef0f6; }
+.install-cmd-btn.copied { background: #e6f4ea; }
 .link-btn {
   display: inline-flex;
   align-items: center;
