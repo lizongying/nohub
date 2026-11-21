@@ -411,7 +411,6 @@
             '<h3 class="detail-section-title">快照</h3>' +
             '<div class="snapshot-path">' + escapeHtml(p.snapshotPath) + '</div>' +
             '<dl class="kv" style="margin-top:10px">' +
-              kvRow('readme', escapeHtml(p.readme || ''), true) +
               kvRow('commit', escapeHtml(p.latestCommit || ''), true) +
             '</dl>' +
           '</div>' +
