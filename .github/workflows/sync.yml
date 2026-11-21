@@ -2,12 +2,12 @@ name: sync
 
 # nohub 同步工作流：作者记录（repos/**）变更后即时触发，每日定时兜底。
 # 同步程序 `node bin/nohub.mjs sync` 拉取上游仓库的 workspace.noml / package.noml，
-# 写入 workspaces/ packages/ 快照、根目录 latest.noml 与 state/sync.noml，
+# 按全部语义化 tag 写入 workspaces/ packages/ 版本快照、根目录 latest.noml 与 state/sync.noml，
 # 再重建 web/data.js 与 web/index.noml，一并提交回仓库；
 # 随后把页面文件与根级 noml 数据（packages/ workspaces/ latest.noml）发布到 gh-pages。
 on:
   schedule:
-    - cron: '1 0 * * *'          # 每日 00:01 UTC = Asia/Shanghai 08:01
+    - cron: '0 22 * * *'          # 每日 22:00 UTC = Asia/Shanghai 06:00
   workflow_dispatch:
     inputs:
       repo:

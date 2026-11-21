@@ -363,13 +363,14 @@ node bin/nohub.mjs sync --root <dir>           # 指向另一个实例仓库
 任务对作者文件里每个 `status` 为 `active` 的仓库执行：
 
 1. 由 `<host>/<owner>/<name>` 推导出仓库地址，用 `git ls-remote --symref` 一次拿到全部 ref 与默认分支。
-2. 按第 7 节解析出**仓库版本**（最新语义化 tag，无 tag 时退化为分支 HEAD 短 SHA），作为快照目录名与抓取用的 ref。
-3. 拉取 `workspace`（缺省 `/workspace.noml`）指向的 `workspace.noml`。
+2. 列出该仓库的**全部语义化 tag**（升序），每个 tag 都是一个待同步的仓库版本；没有语义化 tag 时退化为分支 HEAD 短 SHA，只产生一个版本。
+3. 对**每个版本**以该 tag 为 ref，拉取 `workspace`（缺省 `/workspace.noml`）指向的 `workspace.noml`。
 4. 若该文件不存在，回退到仓库根目录的 `package.noml`，把仓库当作单包处理。
 5. 若有 `workspace.noml`，遍历其键值，逐个拉取 `<repo>/<path>/package.noml`。
 6. 对**每一份**清单单独做字段校验（第 8 节）。单个包不合法只跳过它自己，不连坐整个仓库。
-7. 校验通过的包写入版本快照（见 6.8）与包级 `latest.noml`，并汇总进根 `latest.noml`。
-8. 把每个仓库的同步状态写入 `state/sync.noml`。
+7. 校验通过的包写入该版本的快照（见 6.8）；包级 `latest.noml` 只指向**最新**版本，根 `latest.noml` 也只汇总最新版本。
+8. 旧版本抓不到任何清单（上游早期 tag 尚未引入 `workspace.noml`）时只跳过该版本并告警；最新版本抓不到则整仓失败。
+9. 把每个仓库的同步状态写入 `state/sync.noml`。
 
 同步是幂等的：清单内容未变化时不重写文件，只刷新同步时间。单个仓库失败不影响其他仓库；单个包失败把该仓库标记为 `partial`，失败原因记进 `state/sync.noml` 与告警。
 
@@ -384,6 +385,7 @@ node bin/nohub.mjs sync --root <dir>           # 指向另一个实例仓库
     repo_version: 'v0.4.28'
     commit: '49ab71ed60ae719418f2351986be71748fa843fe'
     branch: 'main'
+    versions: ['v0.1.0', 'v0.2.0', 'v0.4.27', 'v0.4.28']
     packages: ['test1', 'test2', 'test', 'glossary']
     skipped: []
     warnings: [
@@ -412,7 +414,7 @@ latest.noml
 
 - `<host>/<owner>/<repo>` 由作者记录路径解析。
 - `<pkg>` 是 `workspace.noml` 的键，必须与 `package.noml` 的 `name` 一致。
-- `<version>` 是**仓库版本**：同步时用 `git ls-remote --tags` 取该仓库最新的语义化 tag（如 `v0.4.28`）；仓库没有 tag 时退化为 `branch` HEAD 的短 SHA。它决定快照目录的名字，与 `package.noml` 里包自报的 `version` 字段可以不同。
+- `<version>` 是**仓库版本**：同步时用 `git ls-remote` 取该仓库的**全部语义化 tag**（如 `v0.4.28`、`v0.4.27`…），每个 tag 各写一份快照；仓库没有 tag 时退化为 `branch` HEAD 的短 SHA，只写一份。它决定快照目录的名字，与 `package.noml` 里包自报的 `version` 字段可以不同。
 - `latest.noml` 分两层：
   - **全局**：仓库根目录一份，noml 数组，每个元素是一条 `<pkg>:<version>@<host>/<owner>/<repo>` 规格（与 `no` 的依赖写法 `key:version@host/owner/repo` 一致），供搜索与安装快速列出所有包的最新版本。
   - **包级**：`packages/<pkg>/<host>/<owner>/<repo>/latest.noml`，对象 `{ version, commit }`，记录该包当前最新的仓库版本与 commit，供索引构建读取 `latestCommit`。
@@ -425,16 +427,21 @@ latest.noml
 ]
 ```
 
-一次同步对某个仓库产出：
+一次同步对某个仓库产出（以两个 tag 为例）：
 
 ```
+workspaces/github.com/lizongying/nolang/v0.4.27/workspace.noml
 workspaces/github.com/lizongying/nolang/v0.4.28/workspace.noml
+packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml
 packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml
+packages/noui/github.com/lizongying/nolang/v0.4.27/package.noml
 packages/noui/github.com/lizongying/nolang/v0.4.28/package.noml
 packages/glossary/github.com/lizongying/nolang/latest.noml
 ```
 
-并在根目录 `latest.noml` 写入/更新对应条目，例如 `'glossary:v0.4.28@github.com/lizongying/nolang'`。
+并在根目录 `latest.noml` 写入/更新对应条目，例如 `'glossary:v0.4.28@github.com/lizongying/nolang'`（只列最新版本）。
+
+同步是**全量版本**的：每次触发都会按全部语义化 tag 补齐快照，历史版本不会漏。旧 tag 上若还没有 `workspace.noml` / `package.noml`，该版本只跳过并告警。
 
 快照是**不可变**的：同一 `<version>` 目录一旦写入就不再修改；版本更新写新目录，旧版本保留，`latest.noml` 原子指向新版本。删除作者记录里的仓库时，同步任务清理该仓库的 `workspaces/...` 与 `packages/...` 目录（含包级 `latest.noml`），并从根 `latest.noml` 移除对应条目、从索引移除；已安装用户不受影响，因为源码始终在原仓库。
 
@@ -453,9 +460,9 @@ packages/glossary/github.com/lizongying/nolang/latest.noml
 
 **tag 不可解析只告警，不拒绝写入**：只有包显式声明了 `tag_pattern` 或 `tag_prefix` 时，才要求它命中的 tag 真实存在；未声明时 tag 缺省等于包自报的 `version`，与仓库 tag 本就可以不同，缺失只是信息，不是错误。
 
-仓库新增 tag 后，贡献者更新 `package.noml` 的 `version`（必要时调整 `tag_pattern`）并推送，同步会把新版本写进索引。nohub 不主动轮询 tag，版本更新由同步触发。
+仓库新增 tag 后，贡献者更新 `package.noml` 的 `version`（必要时调整 `tag_pattern`）并推送，同步会把新版本写进索引。同步是触发式的（收录记录变更或定时任务），每次触发都扫描全部 tag 并补齐快照，因此不需要逐个 tag 轮询。
 
-注意区分两个「版本」：这里的包版本是 `package.noml` 里声明的版本（缺省则为仓库版本），用于索引的 `version` 字段；快照目录的 `<version>` 是**仓库版本**（同步时取最新 tag），与包版本可以不同，见 6.8。
+注意区分两个「版本」：这里的包版本是 `package.noml` 里声明的版本（缺省则为仓库版本），用于索引的 `version` 字段；快照目录的 `<version>` 是**仓库版本**（同步时逐个语义化 tag 各写一份），与包版本可以不同，见 6.8。
 
 ---
 
@@ -536,6 +543,8 @@ workspaces/<host>/<owner>/<repo>/<repo_version>/workspace.noml
 1. `app.js` 先 `fetch('index.noml')` 取清单（本地预览由注入的 `data.js` 直接提供同结构索引，跳过 fetch）。
 2. 再 `fetch('latest.noml')` 取根清单，得到每个仓库分组默认展示的版本（`latest.noml` 缺失时退回版本最高者）。
 3. 按清单逐份 `fetch('<snapshot>')` 与 `fetch('<latest>')`，交给 `web/noml.js` 暴露的 `window.NOML.parse` 解析（与 `lib/noml.mjs` 同一份语法实现），映射成与上表一致的记录后渲染。
+
+清单里每个仓库版本的快照各占一条，因此页面上的版本切换覆盖该仓库的全部历史 tag，而不只是最新版本。
 
 `data.js` 不发布到 gh-pages，因此线上页面始终走 fetch + noml 解析路径；`packages/`、`workspaces/`、`latest.noml` 原样发布，可直接被其它工具 fetch。
 

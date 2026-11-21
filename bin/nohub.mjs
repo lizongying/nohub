@@ -112,7 +112,8 @@ function printReport(report, opts) {
     }
     const mark = r.status === 'partial' ? '!' : '✓';
     const pkgs = r.packages.map((p) => p.name).join(', ');
-    out.write(`  ${mark} ${where} ${r.version}（${r.branch}）包：${pkgs}\n`);
+    const vers = Array.isArray(r.versions) && r.versions.length > 1 ? `，${r.versions.length} 个版本` : '';
+    out.write(`  ${mark} ${where} ${r.version}（${r.branch}）${vers} 包：${pkgs}\n`);
     for (const s of r.skipped ?? []) {
       out.write(`    - 跳过 ${s.key}（${s.path}）：${s.reason}\n`);
     }

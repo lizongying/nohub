@@ -136,6 +136,85 @@ test('全量同步：写快照、包级 latest、根 latest 与 state', async (t
   assert.deepEqual(state['github.com/lizongying/nolang'].packages, ['glossary', 'noui']);
 });
 
+test('全量同步：为每个仓库版本都写快照，latest 只指向最新', async (t) => {
+  const dir = makeRoot();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeAuthors(dir, `[\n  'nolang',\n]\n`);
+
+  const report = await sync({ root: dir, now: NOW, fetchRepoFile: fakeFetcher(baseFiles), lsRemote });
+
+  assert.equal(report.errors, 0);
+  for (const v of ['v0.4.27', 'v0.4.28']) {
+    assert.ok(exists(dir, `workspaces/github.com/lizongying/nolang/${v}/workspace.noml`), `${v} 应有 workspace 快照`);
+    assert.ok(exists(dir, `packages/glossary/github.com/lizongying/nolang/${v}/package.noml`), `${v} 应有 glossary 快照`);
+    assert.ok(exists(dir, `packages/noui/github.com/lizongying/nolang/${v}/package.noml`), `${v} 应有 noui 快照`);
+  }
+
+  // report.versions 升序，最新版本在末尾
+  assert.deepEqual(report.repos[0].versions.map((v) => v.version), ['v0.4.27', 'v0.4.28']);
+
+  // 包级 / 根 latest.noml 只指向最新版本
+  assert.deepEqual(
+    parseNoml(read(dir, 'packages/glossary/github.com/lizongying/nolang/latest.noml')),
+    { version: 'v0.4.28', commit: SHA_B },
+  );
+  assert.deepEqual(parseNoml(read(dir, 'latest.noml')), [
+    'glossary:v0.4.28@github.com/lizongying/nolang',
+    'noui:v0.4.28@github.com/lizongying/nolang',
+  ]);
+
+  const state = parseNoml(read(dir, 'state/sync.noml'));
+  assert.deepEqual(state['github.com/lizongying/nolang'].versions, ['v0.4.27', 'v0.4.28']);
+});
+
+test('旧版本没有清单：跳过该版本并告警，不影响整仓', async (t) => {
+  const dir = makeRoot();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeAuthors(dir, `[\n  'nolang',\n]\n`);
+
+  // v0.4.27 上 workspace.noml 与根 package.noml 都抓不到（上游早期 tag 常见）
+  const fetchRepoFile = async (host, owner, repo, ref, p) => {
+    if (ref === 'v0.4.27') throw new HttpError(404, `${ref}${p}`);
+    const key = `${host}/${owner}/${repo}|${p}`;
+    if (!(key in baseFiles)) throw new HttpError(404, key);
+    return baseFiles[key];
+  };
+
+  const report = await sync({ root: dir, now: NOW, fetchRepoFile, lsRemote });
+
+  assert.equal(report.errors, 0);
+  assert.equal(report.repos[0].status, 'ok');
+  assert.deepEqual(
+    report.repos[0].versions.map((v) => [v.version, v.status]),
+    [['v0.4.27', 'skipped'], ['v0.4.28', 'ok']],
+  );
+  assert.ok(!exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.27'));
+  assert.ok(report.repos[0].warnings.some((w) => /v0\.4\.27/.test(w)));
+  assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'));
+});
+
+test('最新版本没有清单：整仓失败', async (t) => {
+  const dir = makeRoot();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeAuthors(dir, `[\n  'nolang',\n]\n`);
+
+  const fetchRepoFile = async (host, owner, repo, ref, p) => {
+    if (ref === 'v0.4.28') throw new HttpError(404, `${ref}${p}`);
+    const key = `${host}/${owner}/${repo}|${p}`;
+    if (!(key in baseFiles)) throw new HttpError(404, key);
+    return baseFiles[key];
+  };
+
+  const report = await sync({ root: dir, now: NOW, fetchRepoFile, lsRemote });
+
+  assert.equal(report.errors, 1);
+  assert.equal(report.repos[0].status, 'error');
+  assert.match(report.repos[0].error, /最新版本 v0\.4\.28 既没有/);
+  // 旧版本快照保留，最新版本不写
+  assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml'));
+  assert.ok(!exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.28'));
+});
+
 test('幂等：同样输入再跑一次，文件不重写', async (t) => {
   const dir = makeRoot();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -185,7 +264,8 @@ test('校验失败：单个包不合法时只跳过该包，不连坐整仓', as
   assert.equal(report.errors, 0);
   assert.equal(report.partial, 1);
   assert.equal(report.repos[0].status, 'partial');
-  assert.deepEqual(report.repos[0].skipped.map((s) => s.key), ['noui']);
+  // 每个版本各跳过一次坏包
+  assert.deepEqual(report.repos[0].skipped.map((s) => `${s.version}/${s.key}`), ['v0.4.27/noui', 'v0.4.28/noui']);
   assert.match(report.repos[0].skipped[0].reason, /包名不一致/);
   // 好包照常落盘，坏包一个字节都不写
   assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'));
@@ -337,7 +417,8 @@ test('tag 无法解析：告警但不阻断', async (t) => {
   const report = await sync({ root: dir, now: NOW, fetchRepoFile: fakeFetcher(files), lsRemote });
 
   assert.equal(report.errors, 0);
-  assert.equal(report.warnings, 1);
+  // 两个版本各告警一次
+  assert.equal(report.warnings, 2);
   assert.match(report.repos[0].warnings[0], /tag "vv0\.1\.0" 在仓库中不存在/);
   assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'));
 });

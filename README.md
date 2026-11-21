@@ -148,10 +148,10 @@ nohub 复用 Nolang 工具链（`no`）的 noml 格式，仓库里的 `workspace
 同步有两个触发源：作者每次创建 / 修改 / 删除作者记录后即时触发，以及每日定时兜底。触发与执行都由 **GitHub Actions** 完成（`.github/workflows/sync.yml`），不需要常驻服务：工作流监听 `repos/**` 的 `push`，跑同步程序拉取上游清单、回写快照与 `latest.noml` 并提交。任务对每个 `active` 仓库：
 
 1. 由 `<host>/<owner>/<name>` 推导仓库地址，用 `git ls-remote` 拿到全部 ref 与默认分支。
-2. 解析出**仓库版本**（最新语义化 tag，无 tag 时为分支 HEAD 短 SHA），作为快照目录名。
-3. 拉取 `workspace.noml`；若不存在，回退到根目录的 `package.noml`（单包仓库）。
+2. 列出**全部语义化 tag**，每个 tag 都是一个仓库版本（无 tag 时退化为分支 HEAD 短 SHA，只产生一个版本）。
+3. 对每个版本拉取 `workspace.noml`；若不存在，回退到根目录的 `package.noml`（单包仓库）。
 4. 遍历 `workspace.noml` 的键值，逐个拉取 `package.noml`。
-5. **逐包**校验字段与版本标签；写入版本快照、包级 `latest.noml` 与根 `latest.noml`，并把同步状态记入 `state/sync.noml`。
+5. **逐包**校验字段与版本标签；为每个版本写入快照，包级 `latest.noml` 与根 `latest.noml` 只指向最新版本，并把同步状态记入 `state/sync.noml`。
 
 同步幂等：内容未变时不重写文件，只刷新同步时间。校验以包为单位做隔离——单个包不合法只跳过它自己，同仓库其他包照常入库，该仓库标记为 `partial`；一个包都没通过才整仓 `error`。仓库之间也互不影响，失败原因与告警都记入 `state/sync.noml`。
 
@@ -175,7 +175,7 @@ latest.noml
 state/sync.noml
 ```
 
-`<version>` 是同步时取到的仓库最新 tag（如 `v0.4.28`），无 tag 时退化为分支 HEAD 短 SHA。`latest.noml` 分两层：根目录一份是全局版本指针，数组元素形如 `'glossary:v0.4.28@github.com/lizongying/nolang'`；`packages/<pkg>/<host>/<owner>/<repo>/latest.noml` 是包级指针 `{ version, commit }`，供索引构建读取。`state/sync.noml` 记录每个仓库的上次同步时间、状态、跳过的包与告警。删除作者记录里的仓库时，对应快照与两层 `latest.noml` 一并清理。
+`<version>` 是仓库的语义化 tag（如 `v0.4.28`、`v0.4.27`…），同步给每个 tag 各写一份快照；无 tag 时退化为分支 HEAD 短 SHA，只写一份。旧 tag 上若还没有 `workspace.noml` / `package.noml`，该版本只跳过并告警。`latest.noml` 分两层：根目录一份是全局版本指针，数组元素形如 `'glossary:v0.4.28@github.com/lizongying/nolang'`（只列最新版本）；`packages/<pkg>/<host>/<owner>/<repo>/latest.noml` 是包级指针 `{ version, commit }`，供索引构建读取。`state/sync.noml` 记录每个仓库的上次同步时间、状态、全部版本、跳过的包与告警。删除作者记录里的仓库时，对应快照与两层 `latest.noml` 一并清理。
 
 **只有作者能创建、修改、删除自己的收录记录**：作者身份只看 GitHub 登录账号，不看 `package.noml` 里可随意填写的 `author` 字段。他人提交 PR 也会在合并前被同一套校验拦下。同步状态与包索引由 nohub 内部维护，不回写作者文件。
 
