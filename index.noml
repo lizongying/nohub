@@ -1,15 +1,13 @@
 ; 由 web/build.mjs 自动生成，请勿手动修改。
 ; 重新生成：node web/build.mjs
 {
-  generated_at: '2026-11-21T11:49:12.423Z'
+  generated_at: '2026-11-21T12:35:47.252Z'
   source: 'nohub packages/ 目录快照'
   packages: [
     {
       name: 'glossary'
       tag: 'v0.4.28'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
+      repo: 'github.com/lizongying/nolang'
       version: 'v0.4.28'
       description: 'Nolang 词条化知识库：类型、注解、关键字、语法构造、std 模块与陷阱的 CLI + MCP 检索前端'
       keywords: [
@@ -28,9 +26,7 @@
     {
       name: 'noagent'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
+      repo: 'github.com/lizongying/notools'
       version: 'v0.1.35'
       description: 'Pure Nolang autonomous LLM agent CLI (OpenAI-compatible chat completions, tool-calling loop, SSE streaming, sessions)'
       keywords: [
@@ -52,9 +48,7 @@
     {
       name: 'nogit'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
+      repo: 'github.com/lizongying/notools'
       version: 'v0.1.35'
       description: 'Pure Nolang implementation of Git (no system git binary)'
       keywords: []
@@ -68,9 +62,7 @@
     {
       name: 'noimg'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
+      repo: 'github.com/lizongying/notools'
       version: 'v0.1.35'
       description: 'Pure Nolang image processing library (libvips-style)'
       keywords: []
@@ -84,9 +76,7 @@
     {
       name: 'nojq'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
+      repo: 'github.com/lizongying/notools'
       version: 'v0.1.35'
       description: 'Pure Nolang implementation of jq (1.7 compatible)'
       keywords: [
@@ -104,9 +94,7 @@
     {
       name: 'nonpm'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
+      repo: 'github.com/lizongying/notools'
       version: 'v0.1.35'
       description: 'Pure Nolang implementation of pnpm (fast, disk-efficient package manager)'
       keywords: [
@@ -127,9 +115,7 @@
     {
       name: 'notools'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
+      repo: 'github.com/lizongying/notools'
       version: 'v0.1.35'
       description: 'Unix utilities implemented in Nolang'
       keywords: [
@@ -153,9 +139,7 @@
     {
       name: 'nouv'
       tag: 'v0.1.35'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'notools'
+      repo: 'github.com/lizongying/notools'
       version: 'v0.1.35'
       description: 'Pure Nolang implementation of uv (Python package and project manager)'
       keywords: [
@@ -176,9 +160,7 @@
     {
       name: 'test'
       tag: 'v0.4.28'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
+      repo: 'github.com/lizongying/nolang'
       version: 'v0.4.28'
       description: 'A new Nolang project'
       keywords: [
@@ -194,9 +176,7 @@
     {
       name: 'test1'
       tag: 'v0.4.28'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
+      repo: 'github.com/lizongying/nolang'
       version: 'v0.4.28'
       description: ''
       keywords: []
@@ -210,9 +190,7 @@
     {
       name: 'test2'
       tag: 'v0.4.28'
-      host: 'github.com'
-      owner: 'lizongying'
-      repo: 'nolang'
+      repo: 'github.com/lizongying/nolang'
       version: 'v0.4.28'
       description: 'A new Nolang project'
       keywords: []

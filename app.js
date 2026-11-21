@@ -768,14 +768,16 @@
 
   /** index.noml 的首页条目 → 列表记录（只带列表字段，详情延迟加载） */
   function recordFromIndexEntry(entry) {
-    var repoKey = entry.host + '/' + entry.owner + '/' + entry.repo;
+    // index.noml 用单个 repo 字段（host/owner/repo）定位仓库，这里再拆给记录用
+    var repoKey = entry.repo || '';
+    var parts = repoKey.split('/');
     var record = recordFrom({
       name: entry.name,
       version: entry.version,
       tag: entry.tag,
-      host: entry.host,
-      owner: entry.owner,
-      repo: entry.repo,
+      host: parts[0] || '',
+      owner: parts[1] || '',
+      repo: parts[2] || '',
       repo_version: entry.version,
       snapshot: 'packages/' + entry.name + '/' + repoKey + '/' + entry.version + '/package.noml',
     }, entry, null);
