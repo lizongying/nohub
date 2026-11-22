@@ -246,7 +246,12 @@ async function runApp({ search, local, index }) {
   }
   vm.runInContext(src, sandbox);
   for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r));
-  return { detail: el('q#detailPane').innerHTML, historyCalls, listeners: el('q#results').listeners };
+  return {
+    detail: el('q#detailPane').innerHTML,
+    historyCalls,
+    listeners: el('q#results').listeners,
+    detailListeners: el('q#detailPane').listeners,
+  };
 }
 
 function localIndex() {
@@ -292,6 +297,10 @@ test('?package= 深链：gh-pages 懒加载历史版本（缺省版本取最新�
   });
   assert.match(older.detail, /class="detail-name">glossary</, '应打开目标包详情');
   assert.match(older.detail, /class="ver-chip active" type="button" data-ver="v0.4.27"/, '应加载历史版本快照');
+  assert.ok(
+    older.historyCalls.some((u) => decodeURIComponent(u).includes('package=glossary:v0.4.27@')),
+    'gh-pages 深链加载完成后应写回地址栏',
+  );
 
   const latest = await runApp({
     local: false,
@@ -319,6 +328,40 @@ test('?package= 深链：:latest 指向最新版本并保留 latest 写法', asy
     res.historyCalls.some((u) =>
       decodeURIComponent(u).includes('package=glossary:latest@github.com/lizongying/nolang')),
     '地址栏应保留 latest 写法',
+  );
+});
+
+test('访问具体包：点击列表项与切换版本都会改写地址栏', async () => {
+  const res = await runApp({ local: true, index: localIndex(), search: '' });
+  assert.equal(res.historyCalls.length, 0, '初始不应有 package 参数');
+
+  // 点击结果卡片（glossary 默认最新版本 v0.4.28）
+  res.listeners.click({
+    target: { closest: (sel) => sel === '.pkg' ? { getAttribute: () => '0' } : null },
+  });
+  assert.ok(
+    res.historyCalls.some((u) => decodeURIComponent(u).includes('package=glossary:v0.4.28@')),
+    '点击列表项应写入地址栏',
+  );
+
+  // 切换到历史版本 v0.4.27
+  res.detailListeners.click({
+    target: { closest: (sel) => sel === '.ver-chip' ? { getAttribute: () => 'v0.4.27' } : null },
+  });
+  assert.ok(
+    res.historyCalls.some((u) => decodeURIComponent(u).includes('package=glossary:v0.4.27@')),
+    '切换版本应更新地址栏',
+  );
+});
+
+test('gh-pages 点击列表项立即改写地址栏，不等详情异步加载', async () => {
+  const res = await runApp({ local: false, search: '' });
+  res.listeners.click({
+    target: { closest: (sel) => sel === '.pkg' ? { getAttribute: () => '0' } : null },
+  });
+  assert.ok(
+    res.historyCalls.some((u) => decodeURIComponent(u).includes('package=glossary:')),
+    '点击后同步写入地址栏，无需等待 fetch 完成',
   );
 });
 

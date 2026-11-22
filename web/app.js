@@ -292,24 +292,14 @@
     return { name: m[1], version: m[2] || '', repoKey: m[3] };
   }
 
-  /** 把当前详情写回地址栏（方便复制分享），关闭详情时移除 */
-  function syncLocation() {
+  /** 把包引用写进地址栏；ref 为空则移除 package 参数（其余查询参数保留） */
+  function setLocationRef(ref) {
     if (!window.history || !window.history.replaceState) return;
     try {
       var url = new URL(window.location.href);
       var params = new URLSearchParams(url.search);
-      if (state.selected) {
-        var group = GROUPS[state.groupKey];
-        var ref = pkgRef(state.selected);
-        // 用 latest 打开且仍停留在最新版本时，保留 latest 写法
-        if (state.latestAliasKey && state.latestAliasKey === state.groupKey &&
-            group && state.selected === group.default) {
-          ref = state.selected.name + ':latest@' + repoKeyOf(state.selected);
-        }
-        params.set('package', ref);
-      } else {
-        params.delete('package');
-      }
+      if (ref) params.set('package', ref);
+      else params.delete('package');
       // package 值保留 name:version@host/owner/repo 的可读形式，其余参数正常转义
       var query = [];
       params.forEach(function (v, k) {
@@ -320,6 +310,19 @@
     } catch (e) {
       // file:// 等环境可能不允许 replaceState，忽略即可
     }
+  }
+
+  /** 把当前详情写回地址栏（方便复制分享），关闭详情时移除 */
+  function syncLocation() {
+    if (!state.selected) { setLocationRef(''); return; }
+    var group = GROUPS[state.groupKey];
+    var ref = pkgRef(state.selected);
+    // 用 latest 打开且仍停留在最新版本时，保留 latest 写法
+    if (state.latestAliasKey && state.latestAliasKey === state.groupKey &&
+        group && state.selected === group.default) {
+      ref = state.selected.name + ':latest@' + repoKeyOf(state.selected);
+    }
+    setLocationRef(ref);
   }
 
   /** 从分组里找指定版本的完整记录（gh-pages 历史版本可能尚未加载） */
@@ -581,6 +584,11 @@
       return;
     }
     if (!group.default) return;
+
+    // 访问具体包时立即改写地址栏，不必等详情异步加载完成
+    var refVersion = targetVersion || group.defaultVersion;
+    if (!targetVersion && state.latestAliasKey === group.key) refVersion = 'latest';
+    setLocationRef(group.name + ':' + refVersion + '@' + group.repoKey);
 
     group.loading = true;
     showDetailLoading(group.name);
