@@ -4,6 +4,8 @@ name: sync
 # 同步程序 `node bin/nohub.mjs sync` 拉取上游仓库的 workspace.noml / package.noml，
 # 按全部语义化 tag 写入 workspaces/ packages/ 版本快照、根目录 latest.noml 与 state/sync.noml，
 # 再重建 web/data.js 与 web/index.noml，一并提交回仓库；
+# 同步默认是增量的：state 里记录过的版本直接跳过，只抓新增 tag（上次失败的最新版本会重试），
+# 没有新版本时 state 时间戳也不刷新，避免每日产生空提交；手动可勾选 force 全量重抓。
 # 随后把页面文件与根级 noml 数据（packages/ workspaces/ latest.noml）发布到 gh-pages。
 on:
   schedule:
@@ -13,6 +15,11 @@ on:
       repo:
         description: '只同步 host/owner/repo，留空则全量'
         required: false
+      force:
+        description: '忽略增量状态，重新抓取全部版本'
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [main]
     paths: ['repos/**']
@@ -32,7 +39,9 @@ jobs:
           package-manager-cache: false # Disable automatic npm caching if not required
 
       - name: 同步清单
-        run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict
+        env:
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict $FORCE
 
       - name: 重建索引
         run: node web/build.mjs

@@ -185,7 +185,8 @@ test('web/app.js 走 fetch + noml 解析路径（首屏只加载 index.noml，�
   assert.match(app, /GROUP_LIST\.length \+ '<\/b> 个包/, '顶部统计应按包分组计数');
   assert.match(app, /NOML\.parse/, 'app.js 应调用 NOML.parse 解析 noml');
   assert.match(html, /<script src="noml\.js"><\/script>/, 'index.html 应引入 noml.js');
-  assert.match(html, /<script src="data\.js"><\/script>/, 'index.html 应保留 data.js（本地预览）');
+  assert.doesNotMatch(html, /<script src="data\.js"><\/script>/, 'index.html 不应静态引入 data.js');
+  assert.match(app, /dataScript\.src = 'data\.js'/, 'data.js 应仅在本地预览时动态注入');
 });
 
 test('gh-pages 工作流发布根级 noml 数据', () => {

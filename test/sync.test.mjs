@@ -12,6 +12,7 @@ const NOW = '2026-11-20T08:00:00.000Z';
 
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
+const SHA_C = 'c'.repeat(40);
 
 const WORKSPACE = `{
   glossary: '/glossary'
@@ -65,6 +66,15 @@ function fakeFetcher(files) {
 }
 
 const lsRemote = async () => ({ refs: REFS, defaultBranch: 'main' });
+
+/** 记录每次抓清单用的 ref，并委托给 fakeFetcher。 */
+function recordingFetcher(files, refsSeen) {
+  const base = fakeFetcher(files);
+  return async (host, owner, repo, ref, p) => {
+    refsSeen.push(ref);
+    return base(host, owner, repo, ref, p);
+  };
+}
 
 function read(dir, rel) {
   return fs.readFileSync(path.join(dir, rel), 'utf8');
@@ -476,4 +486,135 @@ test('无 tag 仓库：退化为分支 HEAD 短 SHA', async (t) => {
 
   assert.equal(report.repos[0].version, SHA_B.slice(0, 7));
   assert.ok(exists(dir, `packages/glossary/github.com/lizongying/nolang/${SHA_B.slice(0, 7)}/package.noml`));
+});
+
+test('增量同步：已同步版本不再抓取，也不重写文件与状态', async (t) => {
+  const dir = makeRoot();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeAuthors(dir, `[\n  'nolang',\n]\n`);
+
+  const first = await sync({ root: dir, now: NOW, fetchRepoFile: fakeFetcher(baseFiles), lsRemote });
+  assert.equal(first.repos[0].processed, 2);
+  assert.equal(first.stateWritten, true);
+
+  const before = mtimes(dir);
+  const stateBefore = read(dir, 'state/sync.noml');
+  const report = await sync({
+    root: dir,
+    now: '2026-11-21T08:00:00.000Z',
+    fetchRepoFile: async () => {
+      throw new Error('已同步版本不应再抓清单');
+    },
+    lsRemote,
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(report.repos[0].status, 'ok');
+  assert.equal(report.repos[0].processed, 0);
+  assert.equal(report.repos[0].cached, 2);
+  assert.deepEqual(report.repos[0].versions.map((v) => v.status), ['cached', 'cached']);
+  assert.equal(report.stateWritten, false);
+  assert.deepEqual([...mtimes(dir).entries()], [...before.entries()]);
+  assert.equal(read(dir, 'state/sync.noml'), stateBefore);
+});
+
+test('增量同步：新增 tag 只抓新版本，旧版本索引与快照保留', async (t) => {
+  const dir = makeRoot();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeAuthors(dir, `[\n  'nolang',\n]\n`);
+
+  await sync({ root: dir, now: NOW, fetchRepoFile: fakeFetcher(baseFiles), lsRemote });
+  assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml'));
+
+  const refs = new Map([
+    ...REFS,
+    ['HEAD', SHA_C],
+    ['refs/heads/main', SHA_C],
+    ['refs/tags/v0.4.29', SHA_C],
+  ]);
+  const seen = [];
+  const report = await sync({
+    root: dir,
+    now: '2026-11-21T08:00:00.000Z',
+    fetchRepoFile: recordingFetcher(baseFiles, seen),
+    lsRemote: async () => ({ refs, defaultBranch: 'main' }),
+  });
+
+  assert.equal(report.errors, 0);
+  assert.equal(report.repos[0].version, 'v0.4.29');
+  assert.equal(report.repos[0].processed, 1);
+  assert.equal(report.repos[0].cached, 2);
+  assert.deepEqual([...new Set(seen)], ['v0.4.29']);
+  assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml'));
+  assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.29/package.noml'));
+
+  assert.deepEqual(
+    parseNoml(read(dir, 'packages/glossary/github.com/lizongying/nolang/latest.noml')),
+    {
+      version: 'v0.4.29',
+      commit: SHA_C,
+      versions: [
+        { version: 'v0.4.27', commit: SHA_A },
+        { version: 'v0.4.28', commit: SHA_B },
+        { version: 'v0.4.29', commit: SHA_C },
+      ],
+    },
+  );
+  assert.deepEqual(parseNoml(read(dir, 'latest.noml')), [
+    'glossary:v0.4.29@github.com/lizongying/nolang',
+    'noui:v0.4.29@github.com/lizongying/nolang',
+  ]);
+  assert.deepEqual(parseNoml(read(dir, 'state/sync.noml'))['github.com/lizongying/nolang'].versions, [
+    'v0.4.27', 'v0.4.28', 'v0.4.29',
+  ]);
+});
+
+test('增量同步：上次失败的最新版本会重试', async (t) => {
+  const dir = makeRoot();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeAuthors(dir, `[\n  'nolang',\n]\n`);
+
+  const failing = async (host, owner, repo, ref, p) => {
+    if (ref === 'v0.4.28') throw new HttpError(404, `${ref}${p}`);
+    return fakeFetcher(baseFiles)(host, owner, repo, ref, p);
+  };
+  const first = await sync({ root: dir, now: NOW, fetchRepoFile: failing, lsRemote });
+  assert.equal(first.errors, 1);
+  assert.equal(first.repos[0].status, 'error');
+  assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml'));
+
+  const seen = [];
+  const report = await sync({
+    root: dir,
+    now: '2026-11-21T08:00:00.000Z',
+    fetchRepoFile: recordingFetcher(baseFiles, seen),
+    lsRemote,
+  });
+
+  assert.equal(report.errors, 0);
+  assert.equal(report.repos[0].status, 'ok');
+  assert.equal(report.repos[0].version, 'v0.4.28');
+  assert.deepEqual([...new Set(seen)], ['v0.4.28']);
+  assert.ok(exists(dir, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'));
+});
+
+test('force：忽略增量状态，重新抓取全部版本', async (t) => {
+  const dir = makeRoot();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeAuthors(dir, `[\n  'nolang',\n]\n`);
+
+  await sync({ root: dir, now: NOW, fetchRepoFile: fakeFetcher(baseFiles), lsRemote });
+  const seen = [];
+  const report = await sync({
+    root: dir,
+    now: '2026-11-21T08:00:00.000Z',
+    force: true,
+    fetchRepoFile: recordingFetcher(baseFiles, seen),
+    lsRemote,
+  });
+
+  assert.equal(report.repos[0].processed, 2);
+  assert.equal(report.repos[0].cached, 0);
+  assert.deepEqual([...new Set(seen)].sort(), ['v0.4.27', 'v0.4.28']);
+  assert.equal(parseNoml(read(dir, 'state/sync.noml'))['github.com/lizongying/nolang']['last-sync-at'], '2026-11-21T08:00:00.000Z');
 });

@@ -149,11 +149,11 @@ nohub 复用 Nolang 工具链（`no`）的 noml 格式，仓库里的 `workspace
 
 1. 由 `<host>/<owner>/<name>` 推导仓库地址，用 `git ls-remote` 拿到全部 ref 与默认分支。
 2. 列出**全部语义化 tag**，每个 tag 都是一个仓库版本（无 tag 时退化为分支 HEAD 短 SHA，只产生一个版本）。
-3. 对每个版本拉取 `workspace.noml`；若不存在，回退到根目录的 `package.noml`（单包仓库）。
+3. 对每个**尚未同步**的版本拉取 `workspace.noml`；若不存在，回退到根目录的 `package.noml`（单包仓库）。
 4. 遍历 `workspace.noml` 的键值，逐个拉取 `package.noml`。
 5. **逐包**校验字段与版本标签；为每个版本写入快照，包级 `latest.noml` 与根 `latest.noml` 只指向最新版本，并把同步状态记入 `state/sync.noml`。
 
-同步幂等：内容未变时不重写文件，只刷新同步时间。校验以包为单位做隔离——单个包不合法只跳过它自己，同仓库其他包照常入库，该仓库标记为 `partial`；一个包都没通过才整仓 `error`。仓库之间也互不影响，失败原因与告警都记入 `state/sync.noml`。
+同步采用增量方式：`state/sync.noml` 里记录过的版本直接跳过，只抓新增 tag；旧版本的快照与包级版本索引保持不变，上次失败的最新版本会自动重试。全部命中缓存时连同步时间都不刷新，因此每日任务在无新版本时不会产生空提交。需要修复被改写的旧 tag 时，用 `--force` 全量重抓。校验以包为单位做隔离——单个包不合法只跳过它自己，同仓库其他包照常入库，该仓库标记为 `partial`；一个包都没通过才整仓 `error`。仓库之间也互不影响，失败原因与告警都记入 `state/sync.noml`。
 
 参考实现的同步逻辑在 `lib/sync.mjs`，命令行入口是 `bin/nohub.mjs`：
 
@@ -162,6 +162,7 @@ node bin/nohub.mjs sync                    # 全量同步
 node bin/nohub.mjs sync github.com/o/r     # 只同步一个仓库（增量，不清理）
 node bin/nohub.mjs sync --dry-run          # 只报告，不写盘
 node bin/nohub.mjs sync --strict           # 有失败或部分成功时以非零码退出
+node bin/nohub.mjs sync --force            # 忽略增量状态，重新抓取全部版本
 node bin/nohub.mjs sync --root <dir>       # 指向另一个实例仓库
 ```
 

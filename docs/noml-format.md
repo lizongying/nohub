@@ -276,7 +276,7 @@ nohub 通过 GitHub 登录确定开发者身份，路径 `repos/<host>/<owner>.n
 三个触发源：
 
 - **即时同步**：工作流监听 `push` 且 `paths: repos/**`。作者每次创建 / 修改 / 删除作者记录后自动触发，对受影响的仓库执行一次增量同步。创建、修改触发拉取与写入，删除触发清理（见 6.8）。
-- **每日同步**：工作流的 `schedule` cron（缺省每日一次，时区 `Asia/Shanghai`）兜底，用于发现上游新增 tag、修复失败。
+- **每日同步**：工作流的 `schedule` cron（缺省每日一次，时区 `Asia/Shanghai`）兜底，用于发现上游新增 tag、修复失败。同步按版本增量：`state/sync.noml` 已记录的版本直接跳过，只抓新增 tag；没有新版本时不写文件也不刷新同步时间，因此不产生空提交。上次同步失败时最新版本会重试。
 - **手动 / API**：`workflow_dispatch` 触发，可只同步指定仓库。
 
 参考工作流 `.github/workflows/sync.yml`：
@@ -291,6 +291,11 @@ on:
       repo:
         description: '只同步 host/owner/repo，留空则全量'
         required: false
+      force:
+        description: '忽略增量状态，重新抓取全部版本'
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [main]
     paths: ['repos/**']
@@ -308,7 +313,9 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - name: 同步清单
-        run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict
+        env:
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict $FORCE
       - name: 重建索引
         run: node web/build.mjs
       - name: 回写快照
@@ -353,6 +360,7 @@ node bin/nohub.mjs sync github.com/o/r         # 只同步一个仓库（增量�
 node bin/nohub.mjs sync owner/repo             # 简写，缺省 github.com
 node bin/nohub.mjs sync --dry-run              # 只报告，不写盘
 node bin/nohub.mjs sync --strict               # 有失败或部分成功时以非零码退出
+node bin/nohub.mjs sync --force                # 忽略增量状态，重新抓取全部版本
 node bin/nohub.mjs sync --root <dir>           # 指向另一个实例仓库
 ```
 
@@ -363,8 +371,8 @@ node bin/nohub.mjs sync --root <dir>           # 指向另一个实例仓库
 任务对作者文件里每个 `status` 为 `active` 的仓库执行：
 
 1. 由 `<host>/<owner>/<name>` 推导出仓库地址，用 `git ls-remote --symref` 一次拿到全部 ref 与默认分支。
-2. 列出该仓库的**全部语义化 tag**（升序），每个 tag 都是一个待同步的仓库版本；没有语义化 tag 时退化为分支 HEAD 短 SHA，只产生一个版本。
-3. 对**每个版本**以该 tag 为 ref，拉取 `workspace`（缺省 `/workspace.noml`）指向的 `workspace.noml`。
+2. 列出该仓库的**全部语义化 tag**（升序），每个 tag 都是一个仓库版本；没有语义化 tag 时退化为分支 HEAD 短 SHA，只产生一个版本。state 中已记录的版本直接跳过，只处理新出现的版本（上次失败时最新版本重试；`--force` 则全部重抓）。
+3. 对**每个待处理版本**以该 tag 为 ref，拉取 `workspace`（缺省 `/workspace.noml`）指向的 `workspace.noml`。
 4. 若该文件不存在，回退到仓库根目录的 `package.noml`，把仓库当作单包处理。
 5. 若有 `workspace.noml`，遍历其键值，逐个拉取 `<repo>/<path>/package.noml`。
 6. 对**每一份**清单单独做字段校验（第 8 节）。单个包不合法只跳过它自己，不连坐整个仓库。
@@ -372,9 +380,9 @@ node bin/nohub.mjs sync --root <dir>           # 指向另一个实例仓库
 8. 旧版本抓不到任何清单（上游早期 tag 尚未引入 `workspace.noml`）时只跳过该版本并告警；最新版本抓不到则整仓失败。
 9. 把每个仓库的同步状态写入 `state/sync.noml`。
 
-同步是幂等的：清单内容未变化时不重写文件，只刷新同步时间。单个仓库失败不影响其他仓库；单个包失败把该仓库标记为 `partial`，失败原因记进 `state/sync.noml` 与告警。
+同步是幂等且增量的：清单内容未变化时不重写文件；版本全部命中缓存时连 `last-sync-at` 都不刷新，避免每日任务产生空提交。包级 `latest.noml` 的 `versions` 索引以磁盘现状为底稿，跳过旧版本时仍保留完整版本列表。单个仓库失败不影响其他仓库；单个包失败把该仓库标记为 `partial`，失败原因记进 `state/sync.noml` 与告警。
 
-`state/sync.noml` 是 nohub 内部状态，**不是**规范要求的三类文件之一，参考实现用它记录上次同步结果，便于排查与增量判断：
+`state/sync.noml` 是 nohub 内部状态，**不是**规范要求的三类文件之一，参考实现用它记录上次同步结果，`versions` 同时作为增量同步的已处理版本清单，便于排查与跳过旧版本：
 
 ```noml
 {

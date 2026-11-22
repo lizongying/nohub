@@ -2,7 +2,7 @@
 /**
  * nohub CLI。
  *
- *   nohub sync [host/owner/repo] [--root <dir>] [--dry-run] [--strict]
+ *   nohub sync [host/owner/repo] [--root <dir>] [--dry-run] [--strict] [--force]
  *
  * sync 读取 repos/<host>/<owner>.noml 的收录记录，拉取上游 workspace.noml /
  * package.noml，按仓库版本写快照、更新 latest.noml 与 state/sync.noml。
@@ -18,11 +18,13 @@ const USAGE = `用法：
   --root <dir>    实例仓库根目录（缺省：本仓库）
   --dry-run       只报告，不写盘
   --strict        有仓库失败或部分成功（有包被跳过）时以非零码退出
+  --force         忽略 state/sync.noml，重新抓取全部版本
 
 说明：
   位置参数可写 host/owner/repo，也可简写 owner/repo（缺省 github.com）。
   留空表示全量同步。全量同步会清理已不在收录记录里的仓库快照；
-  指定仓库时只做增量，不清理其它仓库。
+  版本同步默认增量：state 里记录过的版本直接跳过，失败的最新版本会重试，
+  不产生无意义的文件重写与提交。--force 用于修复被改写的旧 tag。
 
   参考实现里用 node bin/nohub.mjs sync 调用；工作流直接跑同一入口。
 `;
@@ -55,6 +57,7 @@ async function main(argv) {
     root: opts.root,
     filter: opts.filter,
     dryRun: opts.dryRun,
+    force: opts.force,
     strict: opts.strict,
   });
 
@@ -63,12 +66,13 @@ async function main(argv) {
 }
 
 function parseSyncArgs(args) {
-  const opts = { root: undefined, filter: '', dryRun: false, strict: false, ok: true, error: '' };
+  const opts = { root: undefined, filter: '', dryRun: false, force: false, strict: false, ok: true, error: '' };
   const positional = [];
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--dry-run') opts.dryRun = true;
+    else if (a === '--force') opts.force = true;
     else if (a === '--strict') opts.strict = true;
     else if (a === '--root') {
       const v = args[++i];
@@ -113,7 +117,8 @@ function printReport(report, opts) {
     const mark = r.status === 'partial' ? '!' : '✓';
     const pkgs = r.packages.map((p) => p.name).join(', ');
     const vers = Array.isArray(r.versions) && r.versions.length > 1 ? `，${r.versions.length} 个版本` : '';
-    out.write(`  ${mark} ${where} ${r.version}（${r.branch}）${vers} 包：${pkgs}\n`);
+    const cached = r.cached ? `，跳过 ${r.cached} 个已同步版本` : '';
+    out.write(`  ${mark} ${where} ${r.version}（${r.branch}）${vers}${cached} 包：${pkgs}\n`);
     for (const s of r.skipped ?? []) {
       out.write(`    - 跳过 ${s.key}（${s.path}）：${s.reason}\n`);
     }
