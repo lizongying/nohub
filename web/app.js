@@ -63,6 +63,7 @@
     activeIdx: -1, // 键盘导航聚焦项
     selected: null, // 当前详情展示的版本记录
     groupKey: null, // 当前详情所属的包分组
+    latestAliasKey: null, // 深链 ?package=...:latest@... 指定的包分组，地址栏保留 latest 写法
   };
 
   var $ = function (sel) { return document.querySelector(sel); };
@@ -279,9 +280,58 @@
     return s;
   }
 
-  // 包引用：name:repoVersion@host/owner/repo
+  // 包引用：name:repoVersion@host/owner/repo（与根级 latest.noml 条目同格式）
   function pkgRef(p) {
     return p.name + ':' + p.repoVersion + '@' + p.host + '/' + p.owner + '/' + p.repo;
+  }
+
+  /** 解析包引用 name[:version]@host/owner/repo；version 缺省或 latest 时取最新 */
+  function parsePackageRef(ref) {
+    var m = /^([^:@\s]+)(?::([^@\s]+))?@([^\s]+)$/.exec(String(ref || '').trim());
+    if (!m) return null;
+    return { name: m[1], version: m[2] || '', repoKey: m[3] };
+  }
+
+  /** 把当前详情写回地址栏（方便复制分享），关闭详情时移除 */
+  function syncLocation() {
+    if (!window.history || !window.history.replaceState) return;
+    try {
+      var url = new URL(window.location.href);
+      var params = new URLSearchParams(url.search);
+      if (state.selected) {
+        var group = GROUPS[state.groupKey];
+        var ref = pkgRef(state.selected);
+        // 用 latest 打开且仍停留在最新版本时，保留 latest 写法
+        if (state.latestAliasKey && state.latestAliasKey === state.groupKey &&
+            group && state.selected === group.default) {
+          ref = state.selected.name + ':latest@' + repoKeyOf(state.selected);
+        }
+        params.set('package', ref);
+      } else {
+        params.delete('package');
+      }
+      // package 值保留 name:version@host/owner/repo 的可读形式，其余参数正常转义
+      var query = [];
+      params.forEach(function (v, k) {
+        query.push(encodeURIComponent(k) + '=' + (k === 'package' ? v : encodeURIComponent(v)));
+      });
+      url.search = query.length ? '?' + query.join('&') : '';
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch (e) {
+      // file:// 等环境可能不允许 replaceState，忽略即可
+    }
+  }
+
+  /** 从分组里找指定版本的完整记录（gh-pages 历史版本可能尚未加载） */
+  function findRecord(group, version) {
+    if (!version || !group) return null;
+    var v = group.versions.filter(function (x) { return x.repoVersion === version; })[0];
+    var candidates = [v && v.entry, group.records[version], v];
+    for (var i = 0; i < candidates.length; i++) {
+      var c = candidates[i];
+      if (c && c.name && !c.listOnly && c.repoVersion === version) return c;
+    }
+    return null;
   }
 
   // 复制命令按钮（点击写入剪贴板）
@@ -481,6 +531,7 @@
     detailPane.classList.remove('open');
     ensureBackdrop().classList.remove('show');
     renderDetail();
+    syncLocation();
     searchInput.focus();
   }
 
@@ -498,6 +549,7 @@
       var card = detailPane.querySelector('.detail-card');
       if (card) card.scrollTop = 0;
     }
+    syncLocation();
   }
 
   function showDetailLoading(name) {
@@ -519,12 +571,13 @@
   /**
    * gh-pages 延迟加载：点击卡片后才请求该包的 latest.noml（版本索引）
    * 与默认版本的 package.noml（详情），随后渲染详情与版本切换。
+   * targetVersion 非空时直达该版本（深链 ?package= 用），缺省取最新版本。
    */
-  function openGroup(group) {
+  function openGroup(group, targetVersion) {
     if (!group) return;
     if (group.loading) return;
     if (group.loaded && group.default && !group.default.listOnly) {
-      selectPackage(group.default);
+      selectPackage(findRecord(group, targetVersion) || group.default);
       return;
     }
     if (!group.default) return;
@@ -572,15 +625,63 @@
       record.listOnly = false;
       group.records[defaultVersion] = record;
       group.default = record;
+      group.meta.forEach(function (m) { m.entry = group.records[m.repoVersion] || null; });
       group.loaded = true;
-      group.loading = false;
 
       renderResults();
-      selectPackage(record);
+      return selectVersion(group, targetVersion);
+    }).then(function () {
+      group.loading = false;
     }).catch(function (err) {
       group.loading = false;
       showDetailError(err);
     });
+  }
+
+  /** 选中分组的指定版本；历史版本在 gh-pages 下按需加载，找不到时回退最新 */
+  function selectVersion(group, version) {
+    if (!version || version === group.defaultVersion) {
+      selectPackage(group.default);
+      return Promise.resolve();
+    }
+    var v = group.versions.filter(function (x) { return x.repoVersion === version; })[0];
+    var cached = findRecord(group, version);
+    if (cached) {
+      selectPackage(cached);
+      return Promise.resolve();
+    }
+    if (!v) {
+      selectPackage(group.default);
+      return Promise.resolve();
+    }
+    return loadVersion(group, v).then(function (record) {
+      selectPackage(record);
+    });
+  }
+
+  /** 地址栏 ?package=name:version@host/owner/repo → 直接打开对应包/版本 */
+  function applyDeepLink() {
+    var ref = '';
+    try {
+      ref = new URLSearchParams(window.location.search).get('package') || '';
+    } catch (e) {
+      var parts = /(?:^|[?&])package=([^&]*)/.exec(window.location.search || '');
+      if (parts) {
+        try { ref = decodeURIComponent(parts[1].replace(/\+/g, ' ')); }
+        catch (err) { ref = parts[1]; }
+      }
+    }
+    if (!ref) return;
+    var target = parsePackageRef(ref);
+    if (!target) { syncLocation(); return; } // 非法引用：清掉地址栏参数
+    var group = GROUPS[target.name + '@' + target.repoKey];
+    if (!group || !group.default) { syncLocation(); return; }
+    if (target.version.toLowerCase() === 'latest') {
+      state.latestAliasKey = target.name + '@' + target.repoKey;
+      openGroup(group, ''); // 走最新版本
+    } else {
+      openGroup(group, target.version);
+    }
   }
 
   // ---------- 事件 ----------
@@ -642,7 +743,7 @@
       return;
     }
     // gh-pages：历史版本按需 fetch package.noml
-    loadVersion(rec).then(function (record) {
+    loadVersion(group, rec).then(function (record) {
       selectPackage(record);
     }).catch(function () {
       chip.textContent = '加载失败';
@@ -786,10 +887,9 @@
   }
 
   /** 按需加载某个历史版本的 package.noml，解析成完整记录并缓存 */
-  function loadVersion(rec) {
-    var group = GROUPS[state.groupKey];
+  function loadVersion(group, rec) {
     if (!group) return Promise.reject(new Error('缺少包分组信息'));
-    if (rec.entry) return Promise.resolve(rec.entry);
+    if (rec.entry && !rec.entry.listOnly) return Promise.resolve(rec.entry);
     if (rec.loading) return rec.loading;
     if (!rec.snapshot) return Promise.reject(new Error('缺少快照地址'));
     var parts = group.repoKey.split('/');
@@ -856,6 +956,7 @@
     renderChips();
     renderResults();
     renderDetail();
+    applyDeepLink();
   }
 
   function startNoml() {

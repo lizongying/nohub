@@ -178,7 +178,7 @@ test('web/app.js 走 fetch + noml 解析路径（首屏只加载 index.noml，�
   assert.match(app, /function recordFromIndexEntry/, 'app.js 应把 index.noml 条目转成列表记录');
   assert.match(app, /entry\.repo/, 'app.js 应从单个 repo 字段拆出 host/owner/repo');
   assert.match(app, /listOnly/, 'app.js 应标记只带列表字段的条目');
-  assert.match(app, /function openGroup\(group\)/, 'app.js 应在点击卡片时延迟加载详情');
+  assert.match(app, /function openGroup\(group, targetVersion\)/, 'app.js 应在点击卡片时延迟加载详情并支持指定版本');
   assert.match(app, /fetchText\(base \+ 'latest\.noml'\)/, '延迟加载应请求包级 latest.noml 版本索引');
   assert.match(app, /fetchText\(base \+ defaultVersion \+ '\/package\.noml'\)/, '延迟加载应请求默认版本 package.noml');
   assert.match(app, /fetchText\(rec\.snapshot\)/, 'app.js 应在切换版本时按需 fetch package.noml');
@@ -187,6 +187,182 @@ test('web/app.js 走 fetch + noml 解析路径（首屏只加载 index.noml，�
   assert.match(html, /<script src="noml\.js"><\/script>/, 'index.html 应引入 noml.js');
   assert.doesNotMatch(html, /<script src="data\.js"><\/script>/, 'index.html 不应静态引入 data.js');
   assert.match(app, /dataScript\.src = 'data\.js'/, 'data.js 应仅在本地预览时动态注入');
+});
+
+/** 最小 DOM stub，在 vm 里跑通 app.js 的完整启动链路 */
+async function runApp({ search, local, index }) {
+  const src = fs.readFileSync(path.join(ROOT, 'web/app.js'), 'utf8');
+  const els = new Map();
+  const el = (key) => {
+    if (!els.has(key)) {
+      els.set(key, {
+        innerHTML: '', textContent: '', hidden: false, listeners: {},
+        classList: { add() {}, remove() {}, contains() { return false; } },
+        addEventListener(type, fn) { this.listeners[type] = fn; },
+        querySelector() { return null; },
+        focus() {}, appendChild() {}, getAttribute() { return ''; },
+      });
+    }
+    return els.get(key);
+  };
+  const historyCalls = [];
+  const href = (local ? 'http://localhost:8000/' : 'https://example.com/nohub/') + search;
+  const sandbox = {
+    console, setTimeout, clearTimeout, URL, URLSearchParams, Promise,
+    location: {
+      href, search, hash: '',
+      hostname: local ? 'localhost' : 'example.com',
+      protocol: local ? 'http:' : 'https:',
+      pathname: local ? '/' : '/nohub/',
+    },
+    history: { replaceState(_a, _b, url) { historyCalls.push(url); } },
+    matchMedia: () => ({ matches: false }),
+    document: {
+      querySelector: (sel) => el('q' + sel),
+      getElementById: (id) => el('#' + id),
+      createElement: () => el('created'),
+      head: { appendChild() {} },
+      body: { appendChild() {} },
+      execCommand() { return true; },
+    },
+    fetch: (url) => {
+      const rel = String(url).replace(/^\.\//, '');
+      let file = path.join(ROOT, rel);
+      if (!fs.existsSync(file)) file = path.join(ROOT, 'web', rel);
+      if (!fs.existsSync(file)) {
+        return Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve('') });
+      }
+      return Promise.resolve({
+        ok: true, status: 200,
+        text: () => Promise.resolve(fs.readFileSync(file, 'utf8')),
+      });
+    },
+  };
+  sandbox.window = sandbox;
+  if (local) sandbox.NOHUB_INDEX = index;
+  vm.createContext(sandbox);
+  if (!local) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'web/noml.js'), 'utf8'), sandbox);
+  }
+  vm.runInContext(src, sandbox);
+  for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r));
+  return { detail: el('q#detailPane').innerHTML, historyCalls, listeners: el('q#results').listeners };
+}
+
+function localIndex() {
+  const mk = (repoVersion) => ({
+    name: 'glossary', version: repoVersion, description: 'glossary', keywords: [], category: '',
+    license: 'Apache-2.0', author: '', email: '', repository: 'https://github.com/lizongying/nolang',
+    publish: true, compiler: {}, dependencies: [], devDependencies: [],
+    host: 'github.com', owner: 'lizongying', repo: 'nolang',
+    repoKey: 'github.com/lizongying/nolang', repoVersion, tag: repoVersion,
+    docsUrl: '', snapshotPath: '', latestCommit: '',
+  });
+  return {
+    generatedAt: '2026-01-01T00:00:00.000Z', source: 'test', count: 2,
+    packages: [mk('v0.4.27'), mk('v0.4.28')],
+  };
+}
+
+test('?package= 深链：本地预览直达指定版本并写回地址栏', async () => {
+  const { detail, historyCalls } = await runApp({
+    local: true,
+    index: localIndex(),
+    search: '?package=glossary:v0.4.27@github.com/lizongying/nolang',
+  });
+  assert.match(detail, /class="detail-name">glossary</, '应直接打开目标包详情');
+  assert.match(detail, /class="ver-chip active" type="button" data-ver="v0.4.27"/, '应选中指定版本');
+  assert.ok(
+    historyCalls.some((u) =>
+      decodeURIComponent(u).includes('package=glossary:v0.4.27@github.com/lizongying/nolang')),
+    '地址栏应同步为当前包引用',
+  );
+});
+
+test('?package= 深链：gh-pages 懒加载历史版本（缺省版本取最新）', async () => {
+  const pkgLatest = parseNoml(
+    fs.readFileSync(path.join(ROOT, 'packages/glossary/github.com/lizongying/nolang/latest.noml'), 'utf8'),
+  );
+  const newest = pkgLatest.version;
+  const activeChip = `class="ver-chip active" type="button" data-ver="${newest}"`;
+
+  const older = await runApp({
+    local: false,
+    search: '?package=glossary:v0.4.27@github.com/lizongying/nolang',
+  });
+  assert.match(older.detail, /class="detail-name">glossary</, '应打开目标包详情');
+  assert.match(older.detail, /class="ver-chip active" type="button" data-ver="v0.4.27"/, '应加载历史版本快照');
+
+  const latest = await runApp({
+    local: false,
+    search: '?package=glossary@github.com/lizongying/nolang',
+  });
+  assert.match(latest.detail, /class="detail-name">glossary</, '省略版本时应打开包');
+  assert.ok(latest.detail.includes(activeChip), '省略版本应取最新');
+
+  const alias = await runApp({
+    local: false,
+    search: '?package=glossary:latest@github.com/lizongying/nolang',
+  });
+  assert.ok(alias.detail.includes(activeChip), 'latest 应取最新');
+});
+
+test('?package= 深链：:latest 指向最新版本并保留 latest 写法', async () => {
+  const res = await runApp({
+    local: true,
+    index: localIndex(),
+    search: '?package=glossary:latest@github.com/lizongying/nolang',
+  });
+  assert.match(res.detail, /class="detail-name">glossary</, '应打开目标包详情');
+  assert.match(res.detail, /class="ver-chip active" type="button" data-ver="v0.4.28"/, 'latest 应取最新版本');
+  assert.ok(
+    res.historyCalls.some((u) =>
+      decodeURIComponent(u).includes('package=glossary:latest@github.com/lizongying/nolang')),
+    '地址栏应保留 latest 写法',
+  );
+});
+
+test('?package= 深链：latest 别名不会串到其他包', async () => {
+  const base = localIndex().packages[0];
+  const mk = (name, repoVersion) => ({ ...base, name, version: repoVersion, repoVersion });
+  const index = {
+    generatedAt: base.version, source: 'test', count: 3,
+    packages: [mk('glossary', 'v0.4.27'), mk('glossary', 'v0.4.28'), mk('test1', 'v0.4.28')],
+  };
+  const res = await runApp({
+    local: true, index,
+    search: '?package=glossary:latest@github.com/lizongying/nolang',
+  });
+  // 模拟点击结果列表中的另一张卡片（按包名排序：glossary=0, test1=1）
+  res.listeners.click({
+    target: {
+      closest: (sel) => sel === '.pkg'
+        ? { getAttribute: (k) => (k === 'data-idx' ? '1' : '') }
+        : null,
+    },
+  });
+  assert.ok(
+    res.historyCalls.some((u) => decodeURIComponent(u).includes('package=test1:v0.4.28@')),
+    '切换到其他包应写具体版本',
+  );
+  assert.ok(
+    !res.historyCalls.some((u) => decodeURIComponent(u).includes('package=test1:latest@')),
+    'latest 别名不应串到其他包',
+  );
+});
+
+test('?package= 深链：非法引用不打开详情并清除地址栏参数', async () => {
+  for (const ref of ['not-a-ref', 'unknown:v0.4.28@github.com/lizongying/nolang']) {
+    const { detail, historyCalls } = await runApp({
+      local: true, index: localIndex(), search: '?package=' + ref,
+    });
+    assert.match(detail, /detail-empty/, `非法引用应保持空详情：${ref}`);
+    assert.ok(historyCalls.length > 0, `非法引用应改写地址栏：${ref}`);
+    assert.ok(
+      historyCalls.every((u) => !new URL('https://x' + u).searchParams.has('package')),
+      `非法引用应清除 package 参数：${ref}`,
+    );
+  }
 });
 
 test('gh-pages 工作流发布根级 noml 数据', () => {

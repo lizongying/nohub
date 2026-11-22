@@ -207,6 +207,13 @@ nohub 只做清单同步，不提供面向用户的检索命令。搜索、预�
 
 三个命令的共同原则是「**指向而非托管**」：用户找到包后，再跳转到它真正的仓库与文档，或用 `no add` / `no install` 导入。
 
+gh-pages 静态搜索页支持用 `?package=` 直达某个包的详情，格式与根级 `latest.noml` 条目一致：`?package=<name>:<version>@<host>/<owner>/<repo>`。省略 `:version` 或写 `:latest` 都打开最新版本；版本不存在时回退到最新版本；引用格式非法或包不存在时清除该参数。打开某个包或切换版本时地址栏会同步该引用（用 `:latest` 打开且仍停留在最新版本时会保留该写法），便于复制分享。例如：
+
+```
+https://lizongying.github.io/nohub/?package=glossary:v0.4.28@github.com/lizongying/nolang
+https://lizongying.github.io/nohub/?package=glossary:latest@github.com/lizongying/nolang
+```
+
 ---
 
 ## 与源码仓库的关系
