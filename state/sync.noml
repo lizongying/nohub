@@ -1,10 +1,10 @@
 {
   'github.com/lizongying/nolang': {
-    last-sync-at: '2026-11-21T08:42:37.614Z'
+    last-sync-at: '2026-11-22T01:44:16.966Z'
     last-sync-status: 'ok'
     last-sync-error: nil
-    repo-version: 'v0.4.28'
-    commit: '49ab71ed60ae719418f2351986be71748fa843fe'
+    repo-version: 'v0.4.29'
+    commit: '926a2426657a994725ee61381767f0ab2fbf3617'
     branch: 'main'
     versions: [
       'v0.1.0',
@@ -98,12 +98,14 @@
       'v0.4.26',
       'v0.4.27',
       'v0.4.28',
+      'v0.4.29',
     ]
     packages: [
       'test1',
       'test2',
       'test',
       'glossary',
+      'noui',
     ]
     skipped: []
     warnings: [
@@ -198,14 +200,15 @@
       'v0.4.26/test1: 缺少 license',
       'v0.4.27/test1: 缺少 license',
       'v0.4.28/test1: 缺少 license',
+      'v0.4.29/test1: 缺少 license',
     ]
   }
   'github.com/lizongying/notools': {
-    last-sync-at: '2026-11-21T08:42:37.614Z'
+    last-sync-at: '2026-11-22T01:44:16.966Z'
     last-sync-status: 'ok'
     last-sync-error: nil
-    repo-version: 'v0.1.35'
-    commit: 'b0716f55c2ab23e52f4899a90f77d8dfcd2b298e'
+    repo-version: 'v0.1.36'
+    commit: 'c1816bb732b6dd62e39f5ca1d592c4be1a14576d'
     branch: 'main'
     versions: [
       'v0.1.0',
@@ -243,6 +246,7 @@
       'v0.1.33',
       'v0.1.34',
       'v0.1.35',
+      'v0.1.36',
     ]
     packages: [
       'noagent',

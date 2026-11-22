@@ -1,6 +1,6 @@
 {
-  version: 'v0.1.35'
-  commit: 'b0716f55c2ab23e52f4899a90f77d8dfcd2b298e'
+  version: 'v0.1.36'
+  commit: 'c1816bb732b6dd62e39f5ca1d592c4be1a14576d'
   versions: [
     {
       version: 'v0.1.34'
@@ -9,6 +9,10 @@
     {
       version: 'v0.1.35'
       commit: 'b0716f55c2ab23e52f4899a90f77d8dfcd2b298e'
+    },
+    {
+      version: 'v0.1.36'
+      commit: 'c1816bb732b6dd62e39f5ca1d592c4be1a14576d'
     },
   ]
 }
