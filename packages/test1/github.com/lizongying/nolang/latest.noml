@@ -1,6 +1,6 @@
 {
-  version: 'v0.4.28'
-  commit: '49ab71ed60ae719418f2351986be71748fa843fe'
+  version: 'v0.4.29'
+  commit: '926a2426657a994725ee61381767f0ab2fbf3617'
   versions: [
     {
       version: 'v0.4.11'
@@ -73,6 +73,10 @@
     {
       version: 'v0.4.28'
       commit: '49ab71ed60ae719418f2351986be71748fa843fe'
+    },
+    {
+      version: 'v0.4.29'
+      commit: '926a2426657a994725ee61381767f0ab2fbf3617'
     },
   ]
 }
