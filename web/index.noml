@@ -1,7 +1,7 @@
 ; 由 web/build.mjs 自动生成，请勿手动修改。
 ; 重新生成：node web/build.mjs
 {
-  generated-at: '2026-11-22T01:45:46.638Z'
+  generated-at: '2026-11-23T02:03:44.994Z'
   source: 'nohub packages/ 目录快照'
   packages: [
     {
