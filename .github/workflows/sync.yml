@@ -22,7 +22,8 @@ on:
         default: false
   push:
     branches: [main]
-    paths: ['repos/**']
+    # repos/** 变更后即时同步；web/** 仅改页面时也要重新发布到 gh-pages
+    paths: ['repos/**', 'web/index.html', 'web/app.js', 'web/styles.css', 'web/noml.js']
 
 permissions:
   contents: write
