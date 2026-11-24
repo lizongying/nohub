@@ -37,3 +37,4 @@ packages
 workspaces
 state
 latest.noml
+web/data.js

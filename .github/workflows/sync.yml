@@ -5,9 +5,9 @@ name: sync
 # 这里用 `no install sync:<version>@github.com/lizongying/nohub` 安装该生成物后运行，
 # 拉取上游仓库的 workspace.noml / package.noml，
 # 按全部语义化 tag 生成 workspaces/ packages/ 版本快照、根目录 latest.noml 与 state/sync.noml，
-# 再重建 web/data.js 与 web/index.noml；产物只发布到 gh-pages，不回写 main。
-# 同步默认是增量的：state 里记录过的版本直接跳过，只抓新增 tag（上次失败的最新版本会重试）；
-# 手动可勾选 force 全量重抓。
+# 再重建 web/index.noml；产物（含增量状态 state/sync.noml）只发布到 gh-pages，不回写 main。
+# 每次同步先从 gh-pages 取回 state，实现增量：记录过的版本直接跳过，只抓新增 tag；
+# 上次失败的最新版本会重试。手动可勾选 force 全量重抓。
 on:
   schedule:
     - cron: '0 22 * * *'          # 每日 22:00 UTC = Asia/Shanghai 06:00
@@ -54,6 +54,17 @@ jobs:
         run: |
           no install "sync:${SYNC_VERSION}@github.com/lizongying/nohub"
 
+      # 增量同步的 state 持久化在 gh-pages（main 不跟踪产物）。同步前取回，
+      # 让本次运行能从上次记录的版本继续，而不是每次都退化成全量抓取。
+      # gh-pages 首次尚无 state 时忽略错误，sync 会按空 state 做首次全量。
+      - name: 从 gh-pages 恢复同步状态
+        continue-on-error: true
+        run: |
+          set -e
+          git fetch --depth 1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages
+          mkdir -p state
+          git show origin/gh-pages:state/sync.noml > state/sync.noml
+
       - name: 同步清单
         env:
           FORCE: ${{ inputs.force && '--force' || '' }}
@@ -80,7 +91,7 @@ jobs:
           for f in index.html app.js styles.css noml.js i18n.js; do cp "web/$f" "$STAGE/$f"; done
           cp web/index.noml "$STAGE/index.noml"
           cp latest.noml "$STAGE/latest.noml"
-          cp -R packages workspaces "$STAGE/"
+          cp -R packages workspaces state "$STAGE/"
 
           # checkout 默认只浅抓 main 一个分支，gh-pages 要显式取回。
           git fetch --depth 1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages
@@ -89,7 +100,7 @@ jobs:
 
           cp "$STAGE"/index.html "$STAGE"/app.js "$STAGE"/styles.css "$STAGE"/noml.js "$STAGE"/i18n.js .
           cp "$STAGE"/index.noml "$STAGE"/latest.noml .
-          cp -R "$STAGE"/packages "$STAGE"/workspaces .
+          cp -R "$STAGE"/packages "$STAGE"/workspaces "$STAGE"/state .
           git add -A
           git diff --cached --quiet && exit 0
           git -c user.name='nohub-bot' \
