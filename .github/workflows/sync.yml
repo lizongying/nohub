@@ -4,11 +4,10 @@ name: sync
 # 同步程序为 Nolang 版 sync（由 build.yml 在 tag 推送时构建并发布），
 # 这里用 `no install sync:<version>@github.com/lizongying/nohub` 安装该生成物后运行，
 # 拉取上游仓库的 workspace.noml / package.noml，
-# 按全部语义化 tag 写入 workspaces/ packages/ 版本快照、根目录 latest.noml 与 state/sync.noml，
-# 再重建 web/data.js 与 web/index.noml，一并提交回仓库；
-# 同步默认是增量的：state 里记录过的版本直接跳过，只抓新增 tag（上次失败的最新版本会重试），
-# 没有新版本时 state 时间戳也不刷新，避免每日产生空提交；手动可勾选 force 全量重抓。
-# 随后把页面文件与根级 noml 数据（packages/ workspaces/ latest.noml）发布到 gh-pages。
+# 按全部语义化 tag 生成 workspaces/ packages/ 版本快照、根目录 latest.noml 与 state/sync.noml，
+# 再重建 web/data.js 与 web/index.noml；产物只发布到 gh-pages，不回写 main。
+# 同步默认是增量的：state 里记录过的版本直接跳过，只抓新增 tag（上次失败的最新版本会重试）；
+# 手动可勾选 force 全量重抓。
 on:
   schedule:
     - cron: '0 22 * * *'          # 每日 22:00 UTC = Asia/Shanghai 06:00
@@ -65,32 +64,32 @@ jobs:
       - name: 重建索引
         run: node web/build.mjs
 
-      - name: 回写快照
-        run: |
-          git add workspaces packages latest.noml state web/data.js web/index.noml web/noml.js
-          git diff --cached --quiet && exit 0
-          git -c user.name='nohub-bot' \
-              -c user.email='nohub-bot@users.noreply.github.com' \
-              commit -m 'sync: update manifests'
-          git push
-
-      # 搜索页部署在 gh-pages 分支：页面文件 + 根级 noml 数据（packages/ workspaces/ latest.noml）。
+      # 同步产物只发布到 gh-pages，不回写 main：main 由作者/维护者手动维护，
+      # CI 不在 main 上产生提交，避免每日同步把 main 的历史刷满 manifest 更新。
       # 线上页面首屏只 fetch index.noml（每包一条最新版本）即可渲染列表；
       # 点击卡片后才延迟请求该包的 latest.noml（版本索引）与 package.noml（详情）。
       - name: 同步搜索页（gh-pages）
         continue-on-error: true
         run: |
           set -e
-          # checkout 默认只浅抓 main 一个分支，gh-pages 要显式取回；
-          # 同时先记下 main 的 SHA，切分支后才仍取得到 web/ 与 packages/。
-          SRC=$(git rev-parse HEAD)
+          # 同步与重建已在工作区生成产物，先整体搬到 runner 临时目录；
+          # checkout -B gh-pages 会清空工作区，之后再从临时目录写回。
+          STAGE="$RUNNER_TEMP/nohub-pages-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          for f in index.html app.js styles.css noml.js i18n.js; do cp "web/$f" "$STAGE/$f"; done
+          cp web/index.noml "$STAGE/index.noml"
+          cp latest.noml "$STAGE/latest.noml"
+          cp -R packages workspaces "$STAGE/"
+
+          # checkout 默认只浅抓 main 一个分支，gh-pages 要显式取回。
           git fetch --depth 1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages
           git checkout -B gh-pages origin/gh-pages
           git rm -rf -q . || true
-          for f in index.html app.js styles.css noml.js i18n.js; do git show "$SRC:web/$f" > "$f"; done
-          git show "$SRC:latest.noml" > latest.noml
-          git show "$SRC:web/index.noml" > index.noml
-          git archive "$SRC" packages workspaces | tar -x
+
+          cp "$STAGE"/index.html "$STAGE"/app.js "$STAGE"/styles.css "$STAGE"/noml.js "$STAGE"/i18n.js .
+          cp "$STAGE"/index.noml "$STAGE"/latest.noml .
+          cp -R "$STAGE"/packages "$STAGE"/workspaces .
           git add -A
           git diff --cached --quiet && exit 0
           git -c user.name='nohub-bot' \
