@@ -1,9 +1,9 @@
 // 由 web/build.mjs 自动生成，请勿手动修改。
 // 重新生成：node web/build.mjs
 window.NOHUB_INDEX = {
-  "generatedAt": "2026-11-24T00:50:17.112Z",
+  "generatedAt": "2026-11-24T05:40:15.123Z",
   "source": "nohub packages/ 目录快照",
-  "count": 99,
+  "count": 106,
   "packages": [
     {
       "name": "glossary",
@@ -535,6 +535,50 @@ window.NOHUB_INDEX = {
     },
     {
       "name": "noagent",
+      "version": "v0.1.37",
+      "description": "Pure Nolang autonomous LLM agent CLI (OpenAI-compatible chat completions, tool-calling loop, SSE streaming, sessions)",
+      "keywords": [
+        "llm",
+        "agent",
+        "cli",
+        "openai",
+        "chat-completions",
+        "tool-calling",
+        "sse"
+      ],
+      "author": "lizongying",
+      "email": "lizongying@msn.com",
+      "organization": "nolang",
+      "repository": "git@github.com:lizongying/notools.git",
+      "repoUrl": "https://github.com/lizongying/notools",
+      "homepage": "https://github.com/lizongying/notools",
+      "license": "MIT",
+      "dependencies": [],
+      "devDependencies": [],
+      "category": "",
+      "docs": "",
+      "readme": "",
+      "tagPattern": "",
+      "tagPrefix": "",
+      "publish": true,
+      "compiler": {
+        "version": "v0.4.31",
+        "link-libs": []
+      },
+      "output": "/dist",
+      "ignore": [],
+      "host": "github.com",
+      "owner": "lizongying",
+      "repo": "notools",
+      "repoVersion": "v0.1.37",
+      "repoKey": "github.com/lizongying/notools",
+      "tag": "v0.1.37",
+      "docsUrl": "https://github.com/lizongying/notools",
+      "snapshotPath": "packages/noagent/github.com/lizongying/notools/v0.1.37/package.noml",
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
+    },
+    {
+      "name": "noagent",
       "version": "v0.1.36",
       "description": "Pure Nolang autonomous LLM agent CLI (OpenAI-compatible chat completions, tool-calling loop, SSE streaming, sessions)",
       "keywords": [
@@ -575,7 +619,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.36",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/noagent/github.com/lizongying/notools/v0.1.36/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "noagent",
@@ -619,7 +663,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.35",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/noagent/github.com/lizongying/notools/v0.1.35/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "noagent",
@@ -663,7 +707,43 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.34",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/noagent/github.com/lizongying/notools/v0.1.34/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
+    },
+    {
+      "name": "nogit",
+      "version": "v0.1.37",
+      "description": "Pure Nolang implementation of Git (no system git binary)",
+      "keywords": [],
+      "author": "李宗英",
+      "email": "lizongying@msn.com",
+      "organization": "",
+      "repository": "git@github.com:lizongying/notools.git",
+      "repoUrl": "https://github.com/lizongying/notools",
+      "homepage": "https://github.com/lizongying/notools",
+      "license": "MIT",
+      "dependencies": [],
+      "devDependencies": [],
+      "category": "",
+      "docs": "",
+      "readme": "",
+      "tagPattern": "",
+      "tagPrefix": "",
+      "publish": true,
+      "compiler": {
+        "version": "v0.4.31",
+        "link-libs": []
+      },
+      "output": "/dist",
+      "ignore": [],
+      "host": "github.com",
+      "owner": "lizongying",
+      "repo": "notools",
+      "repoVersion": "v0.1.37",
+      "repoKey": "github.com/lizongying/notools",
+      "tag": "v0.1.37",
+      "docsUrl": "https://github.com/lizongying/notools",
+      "snapshotPath": "packages/nogit/github.com/lizongying/notools/v0.1.37/package.noml",
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nogit",
@@ -699,7 +779,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.36",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nogit/github.com/lizongying/notools/v0.1.36/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nogit",
@@ -735,7 +815,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.35",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nogit/github.com/lizongying/notools/v0.1.35/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nogit",
@@ -771,7 +851,43 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.34",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nogit/github.com/lizongying/notools/v0.1.34/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
+    },
+    {
+      "name": "noimg",
+      "version": "v0.1.37",
+      "description": "Pure Nolang image processing library (libvips-style)",
+      "keywords": [],
+      "author": "lizongying",
+      "email": "lizongying@msn.com",
+      "organization": "nolang",
+      "repository": "git@github.com:lizongying/notools.git",
+      "repoUrl": "https://github.com/lizongying/notools",
+      "homepage": "https://github.com/lizongying/notools",
+      "license": "MIT",
+      "dependencies": [],
+      "devDependencies": [],
+      "category": "",
+      "docs": "",
+      "readme": "",
+      "tagPattern": "",
+      "tagPrefix": "",
+      "publish": true,
+      "compiler": {
+        "version": "v0.4.31",
+        "link-libs": []
+      },
+      "output": "/dist",
+      "ignore": [],
+      "host": "github.com",
+      "owner": "lizongying",
+      "repo": "notools",
+      "repoVersion": "v0.1.37",
+      "repoKey": "github.com/lizongying/notools",
+      "tag": "v0.1.37",
+      "docsUrl": "https://github.com/lizongying/notools",
+      "snapshotPath": "packages/noimg/github.com/lizongying/notools/v0.1.37/package.noml",
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "noimg",
@@ -807,7 +923,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.36",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/noimg/github.com/lizongying/notools/v0.1.36/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "noimg",
@@ -843,7 +959,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.35",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/noimg/github.com/lizongying/notools/v0.1.35/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "noimg",
@@ -879,7 +995,47 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.34",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/noimg/github.com/lizongying/notools/v0.1.34/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
+    },
+    {
+      "name": "nojq",
+      "version": "v0.1.37",
+      "description": "Pure Nolang implementation of jq (1.7 compatible)",
+      "keywords": [
+        "jq",
+        "json",
+        "query"
+      ],
+      "author": "李宗英",
+      "email": "lizongying@msn.com",
+      "organization": "",
+      "repository": "git@github.com:lizongying/notools.git",
+      "repoUrl": "https://github.com/lizongying/notools",
+      "homepage": "https://github.com/lizongying/notools",
+      "license": "MIT",
+      "dependencies": [],
+      "devDependencies": [],
+      "category": "",
+      "docs": "",
+      "readme": "",
+      "tagPattern": "",
+      "tagPrefix": "",
+      "publish": true,
+      "compiler": {
+        "version": "v0.4.31",
+        "link-libs": []
+      },
+      "output": "/dist",
+      "ignore": [],
+      "host": "github.com",
+      "owner": "lizongying",
+      "repo": "notools",
+      "repoVersion": "v0.1.37",
+      "repoKey": "github.com/lizongying/notools",
+      "tag": "v0.1.37",
+      "docsUrl": "https://github.com/lizongying/notools",
+      "snapshotPath": "packages/nojq/github.com/lizongying/notools/v0.1.37/package.noml",
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nojq",
@@ -919,7 +1075,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.36",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nojq/github.com/lizongying/notools/v0.1.36/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nojq",
@@ -959,7 +1115,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.35",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nojq/github.com/lizongying/notools/v0.1.35/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nojq",
@@ -999,7 +1155,50 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.34",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nojq/github.com/lizongying/notools/v0.1.34/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
+    },
+    {
+      "name": "nonpm",
+      "version": "v0.1.37",
+      "description": "Pure Nolang implementation of pnpm (fast, disk-efficient package manager)",
+      "keywords": [
+        "pnpm",
+        "npm",
+        "package-manager",
+        "node",
+        "javascript",
+        "monorepo"
+      ],
+      "author": "lizongying",
+      "email": "lizongying@msn.com",
+      "organization": "nolang",
+      "repository": "git@github.com:lizongying/notools.git",
+      "repoUrl": "https://github.com/lizongying/notools",
+      "homepage": "https://github.com/lizongying/notools",
+      "license": "MIT",
+      "dependencies": [],
+      "devDependencies": [],
+      "category": "",
+      "docs": "",
+      "readme": "",
+      "tagPattern": "",
+      "tagPrefix": "",
+      "publish": true,
+      "compiler": {
+        "version": "v0.4.31",
+        "link-libs": []
+      },
+      "output": "/dist",
+      "ignore": [],
+      "host": "github.com",
+      "owner": "lizongying",
+      "repo": "notools",
+      "repoVersion": "v0.1.37",
+      "repoKey": "github.com/lizongying/notools",
+      "tag": "v0.1.37",
+      "docsUrl": "https://github.com/lizongying/notools",
+      "snapshotPath": "packages/nonpm/github.com/lizongying/notools/v0.1.37/package.noml",
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nonpm",
@@ -1042,7 +1241,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.36",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nonpm/github.com/lizongying/notools/v0.1.36/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nonpm",
@@ -1085,7 +1284,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.35",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nonpm/github.com/lizongying/notools/v0.1.35/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nonpm",
@@ -1128,7 +1327,53 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.34",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nonpm/github.com/lizongying/notools/v0.1.34/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
+    },
+    {
+      "name": "notools",
+      "version": "v0.1.37",
+      "description": "Unix utilities implemented in Nolang",
+      "keywords": [
+        "cli",
+        "utilities",
+        "ls",
+        "cat",
+        "rm",
+        "tree",
+        "mv",
+        "touch",
+        "echo"
+      ],
+      "author": "lizongying",
+      "email": "lizongying@msn.com",
+      "organization": "nolang",
+      "repository": "git@github.com:lizongying/notools.git",
+      "repoUrl": "https://github.com/lizongying/notools",
+      "homepage": "https://github.com/lizongying/notools",
+      "license": "MIT",
+      "dependencies": [],
+      "devDependencies": [],
+      "category": "",
+      "docs": "",
+      "readme": "",
+      "tagPattern": "",
+      "tagPrefix": "",
+      "publish": true,
+      "compiler": {
+        "version": "v0.4.31",
+        "link-libs": []
+      },
+      "output": "/dist",
+      "ignore": [],
+      "host": "github.com",
+      "owner": "lizongying",
+      "repo": "notools",
+      "repoVersion": "v0.1.37",
+      "repoKey": "github.com/lizongying/notools",
+      "tag": "v0.1.37",
+      "docsUrl": "https://github.com/lizongying/notools",
+      "snapshotPath": "packages/notools/github.com/lizongying/notools/v0.1.37/package.noml",
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "notools",
@@ -1174,7 +1419,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.36",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/notools/github.com/lizongying/notools/v0.1.36/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "notools",
@@ -1220,7 +1465,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.35",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/notools/github.com/lizongying/notools/v0.1.35/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "notools",
@@ -1266,7 +1511,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.34",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/notools/github.com/lizongying/notools/v0.1.34/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "noui",
@@ -1387,6 +1632,49 @@ window.NOHUB_INDEX = {
     },
     {
       "name": "nouv",
+      "version": "v0.1.37",
+      "description": "Pure Nolang implementation of uv (Python package and project manager)",
+      "keywords": [
+        "uv",
+        "python",
+        "package-manager",
+        "venv",
+        "pip",
+        "pyproject"
+      ],
+      "author": "lizongying",
+      "email": "lizongying@msn.com",
+      "organization": "nolang",
+      "repository": "git@github.com:lizongying/notools.git",
+      "repoUrl": "https://github.com/lizongying/notools",
+      "homepage": "https://github.com/lizongying/notools",
+      "license": "MIT",
+      "dependencies": [],
+      "devDependencies": [],
+      "category": "",
+      "docs": "",
+      "readme": "",
+      "tagPattern": "",
+      "tagPrefix": "",
+      "publish": true,
+      "compiler": {
+        "version": "v0.4.31",
+        "link-libs": []
+      },
+      "output": "/dist",
+      "ignore": [],
+      "host": "github.com",
+      "owner": "lizongying",
+      "repo": "notools",
+      "repoVersion": "v0.1.37",
+      "repoKey": "github.com/lizongying/notools",
+      "tag": "v0.1.37",
+      "docsUrl": "https://github.com/lizongying/notools",
+      "snapshotPath": "packages/nouv/github.com/lizongying/notools/v0.1.37/package.noml",
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
+    },
+    {
+      "name": "nouv",
       "version": "v0.1.36",
       "description": "Pure Nolang implementation of uv (Python package and project manager)",
       "keywords": [
@@ -1426,7 +1714,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.36",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nouv/github.com/lizongying/notools/v0.1.36/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nouv",
@@ -1469,7 +1757,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.35",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nouv/github.com/lizongying/notools/v0.1.35/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "nouv",
@@ -1512,7 +1800,7 @@ window.NOHUB_INDEX = {
       "tag": "v0.1.34",
       "docsUrl": "https://github.com/lizongying/notools",
       "snapshotPath": "packages/nouv/github.com/lizongying/notools/v0.1.34/package.noml",
-      "latestCommit": "c1816bb732b6dd62e39f5ca1d592c4be1a14576d"
+      "latestCommit": "77bee5c250888c63af859251a5aa7714dc86e8b2"
     },
     {
       "name": "test",
