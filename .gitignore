@@ -4,8 +4,7 @@ Thumbs.db
 .vscode
 .README.md
 
-.agents/plans
-.agents/specs
+.agents
 .reasonix
 .deveco
 .mimocode
@@ -18,7 +17,6 @@ Thumbs.db
 .meituan-catpaw
 .workbuddy
 .workbuddy-ai
-.workspace.noml
 .qoder
 .cline
 .copilot
@@ -30,11 +28,12 @@ bin
 dist
 
 node_modules
-target
 
 docs/build
 docs/.docusaurus
-*.log
 *.wasm
-/*.no
-__pycache__
+
+packages
+workspaces
+state
+latest.noml
