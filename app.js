@@ -14,9 +14,20 @@
 
   var INDEX = window.NOHUB_INDEX || null;
   var PKGS = INDEX ? INDEX.packages || [] : [];
+  var I18N = window.NOHUB_I18N || { languages: ['zh-CN'], labels: {}, htmlLang: {}, strings: {} };
 
   // no 运行时一键安装命令（尚未安装 no 时先执行）
   var NO_INSTALL_CMD = 'curl -fsSL https://raw.githubusercontent.com/lizongying/nolang/main/install.sh | sh';
+
+  // ---------- 多语言 / 分类哨兵 ----------
+  var DEFAULT_LANG = 'zh-TW';
+  var CAT_ALL = '*all*'; // 「全部」分类（UI 文案随语言切换，内部用哨兵值）
+  var CAT_NONE = '*none*'; // 未分类占位（数据缺失 category 时）
+
+  var LOCALES = {
+    'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW', ja: 'ja-JP', ko: 'ko-KR',
+    en: 'en-US', fr: 'fr-FR', ru: 'ru-RU', de: 'de-DE', es: 'es-ES', 'pt-BR': 'pt-BR',
+  };
 
   // ---------- 按包分组（同名同仓库的多个版本快照归为一组） ----------
   var GROUPS = {};
@@ -59,7 +70,8 @@
 
   var state = {
     q: '',
-    category: '全部',
+    category: CAT_ALL,
+    lang: DEFAULT_LANG,
     activeIdx: -1, // 键盘导航聚焦项
     selected: null, // 当前详情展示的版本记录
     groupKey: null, // 当前详情所属的包分组
@@ -76,6 +88,114 @@
   var detailPane = $('#detailPane');
   var headerStats = $('#headerStats');
   var footerSource = $('#footerSource');
+  var themeToggle = $('#themeToggle');
+  var langSelect = $('#langSelect');
+
+  // ---------- i18n ----------
+  function knownLang(code) {
+    return I18N.languages.indexOf(code) !== -1 ? code : null;
+  }
+
+  /** 把任意语言标签归一化到已支持的语言；不支持返回 null */
+  function normalizeLang(code) {
+    var c = String(code == null ? '' : code).trim();
+    if (knownLang(c)) return c;
+    var lower = c.toLowerCase();
+    if (!lower) return null;
+    if (lower.indexOf('zh') === 0) {
+      // 繁：tw / hk / mo / hant；其余（cn / sg / hans）归简中
+      return /(tw|hant|hk|mo)/.test(lower) ? knownLang('zh-TW') : knownLang('zh-CN');
+    }
+    var base = lower.split(/[-_]/)[0];
+    for (var i = 0; i < I18N.languages.length; i++) {
+      if (I18N.languages[i].split('-')[0] === base) return I18N.languages[i];
+    }
+    return null;
+  }
+
+  /** 按语言选复数形式键（CLDR 简化规则） */
+  function pluralForm(lang, n) {
+    var base = lang.split('-')[0];
+    if (base === 'zh' || base === 'ja' || base === 'ko') return 'other';
+    if (base === 'fr') return (n === 0 || n === 1) ? 'one' : 'other';
+    if (base === 'ru') {
+      var m10 = n % 10;
+      var m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return 'one';
+      if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return 'few';
+      return 'many';
+    }
+    return n === 1 ? 'one' : 'other'; // en / de / es / pt
+  }
+
+  /** 取文案：t(key, vars)；缺失时回退简中，再缺失返回键名 */
+  function t(key, vars) {
+    var table = (I18N.strings && (I18N.strings[state.lang] || I18N.strings[DEFAULT_LANG])) || {};
+    var s = Object.prototype.hasOwnProperty.call(table, key) ? table[key] : null;
+    if (s == null && state.lang !== DEFAULT_LANG) {
+      var fb = I18N.strings[DEFAULT_LANG] || {};
+      s = Object.prototype.hasOwnProperty.call(fb, key) ? fb[key] : null;
+    }
+    if (s == null) return key;
+    if (typeof s === 'object') {
+      var n = vars && vars.n != null ? Number(vars.n) : 1;
+      s = s[pluralForm(state.lang, n)] || s.other || '';
+    }
+    if (vars) {
+      s = String(s).replace(/\{(\w+)\}/g, function (m, k) {
+        return vars[k] != null ? String(vars[k]) : m;
+      });
+    }
+    return s;
+  }
+
+  function detectLang() {
+    try {
+      var saved = localStorage.getItem('nohub-lang');
+      if (saved) {
+        var hit = normalizeLang(saved);
+        if (hit) return hit;
+      }
+    } catch (e) { /* file:// 等场景忽略 */ }
+    if (typeof navigator !== 'undefined' && navigator.language) {
+      var fromNav = normalizeLang(navigator.language);
+      if (fromNav) return fromNav;
+    }
+    return DEFAULT_LANG;
+  }
+
+  /** 静态文案（index.html 里带 data-i18n* 属性的元素） */
+  function applyStaticTexts() {
+    if (!document.querySelectorAll) return;
+    var i;
+    var nodes = document.querySelectorAll('[data-i18n]');
+    for (i = 0; i < nodes.length; i++) nodes[i].innerHTML = t(nodes[i].getAttribute('data-i18n'));
+    nodes = document.querySelectorAll('[data-i18n-ph]');
+    for (i = 0; i < nodes.length; i++) nodes[i].setAttribute('placeholder', t(nodes[i].getAttribute('data-i18n-ph')));
+    nodes = document.querySelectorAll('[data-i18n-content]');
+    for (i = 0; i < nodes.length; i++) nodes[i].setAttribute('content', t(nodes[i].getAttribute('data-i18n-content')));
+    ['aria-label', 'title'].forEach(function (attr) {
+      var list = document.querySelectorAll('[data-i18n-' + attr + ']');
+      for (i = 0; i < list.length; i++) list[i].setAttribute(attr, t(list[i].getAttribute('data-i18n-' + attr)));
+    });
+  }
+
+  /** 设置语言并整体重渲染；rerender=false 时只更新状态（启动阶段由 boot 统一渲染） */
+  function applyLang(lang, rerender) {
+    state.lang = normalizeLang(lang) || DEFAULT_LANG;
+    if (document.documentElement) {
+      document.documentElement.setAttribute('lang', (I18N.htmlLang && I18N.htmlLang[state.lang]) || state.lang);
+    }
+    try { localStorage.setItem('nohub-lang', state.lang); } catch (e) { /* file:// 等场景忽略 */ }
+    if (rerender !== false) {
+      applyStaticTexts();
+      renderHeader();
+      renderChips();
+      renderResults();
+      renderDetail();
+      if (langSelect) langSelect.value = state.lang;
+    }
+  }
 
   // ---------- 工具 ----------
   function escapeHtml(s) {
@@ -107,7 +227,7 @@
     if (!iso) return '';
     try {
       var d = new Date(iso);
-      return d.toLocaleString('zh-CN', { hour12: false });
+      return d.toLocaleString(LOCALES[state.lang] || 'zh-CN', { hour12: false });
     } catch (e) {
       return iso;
     }
@@ -153,7 +273,7 @@
     var list = GROUP_LIST.filter(function (g) {
       var p = g.default;
       if (!p) return false;
-      if (cat !== '全部' && (p.category || '未分类') !== cat) return false;
+      if (cat !== CAT_ALL && (p.category || CAT_NONE) !== cat) return false;
       if (tokens.length === 0) return true;
       var score = 0;
       for (var i = 0; i < tokens.length; i++) {
@@ -175,34 +295,43 @@
   function categories() {
     var map = {};
     GROUP_LIST.forEach(function (g) {
-      var c = (g.default && g.default.category) || '未分类';
+      var c = (g.default && g.default.category) || CAT_NONE;
       map[c] = (map[c] || 0) + 1;
     });
     return Object.keys(map).sort(function (a, b) {
-      if (a === '未分类') return 1;
-      if (b === '未分类') return -1;
+      if (a === CAT_NONE) return 1;
+      if (b === CAT_NONE) return -1;
       return a.localeCompare(b);
     }).map(function (c) { return { name: c, count: map[c] }; });
+  }
+
+  /** 分类显示名：哨兵值翻译成「全部 / 未分类」，其余为数据里的原始分类名 */
+  function catLabel(c) {
+    if (c === CAT_ALL) return t('all');
+    if (c === CAT_NONE) return t('uncategorized');
+    return c;
   }
 
   // ---------- 渲染：头部统计 / 分类 ----------
   function renderHeader() {
     var repos = {};
     GROUP_LIST.forEach(function (g) { repos[g.repoKey] = true; });
+    var repoCount = Object.keys(repos).length;
     headerStats.innerHTML =
-      '<span class="stat-pill"><b>' + GROUP_LIST.length + '</b> 个包</span>' +
-      '<span class="stat-pill"><b>' + Object.keys(repos).length + '</b> 个仓库</span>';
-    footerSource.textContent = '数据快照生成于 ' + fmtTime(INDEX.generatedAt);
+      '<span class="stat-pill"><b>' + GROUP_LIST.length + '</b> ' + t('pkgUnit', { n: GROUP_LIST.length }) + '</span>' +
+      '<span class="stat-pill"><b>' + repoCount + '</b> ' + t('repoUnit', { n: repoCount }) + '</span>';
+    footerSource.textContent = t('footerGenAt') + fmtTime(INDEX.generatedAt);
   }
 
   function renderChips() {
     var cats = categories();
-    var html = '<button class="chip' + (state.category === '全部' ? ' active' : '') +
-      '" data-cat="全部" type="button">全部<span class="chip-count">' + GROUP_LIST.length + '</span></button>';
+    var html = '<button class="chip' + (state.category === CAT_ALL ? ' active' : '') +
+      '" data-cat="' + CAT_ALL + '" type="button">' + t('all') +
+      '<span class="chip-count">' + GROUP_LIST.length + '</span></button>';
     cats.forEach(function (c) {
       html += '<button class="chip' + (state.category === c.name ? ' active' : '') +
         '" data-cat="' + escapeHtml(c.name) + '" type="button">' +
-        escapeHtml(c.name) + '<span class="chip-count">' + c.count + '</span></button>';
+        escapeHtml(catLabel(c.name)) + '<span class="chip-count">' + c.count + '</span></button>';
     });
     chipsEl.innerHTML = html;
   }
@@ -222,10 +351,10 @@
     emptyEl.hidden = true;
 
     var total = GROUP_LIST.length;
-    if (state.q || state.category !== '全部') {
-      resultsMeta.innerHTML = '找到 <b>' + list.length + '</b> / ' + total + ' 个包';
+    if (state.q || state.category !== CAT_ALL) {
+      resultsMeta.innerHTML = t('foundOf', { n: list.length, total: total });
     } else {
-      resultsMeta.innerHTML = '共 <b>' + total + '</b> 个包';
+      resultsMeta.innerHTML = t('totalPkg', { n: total });
     }
 
     resultsEl.innerHTML = list.map(function (g, i) {
@@ -235,7 +364,7 @@
         return '<span class="tag">' + highlight(k, tokens) + '</span>';
       }).join('');
       var badges = '<span class="badge">' + escapeHtml(p.repoVersion) + '</span>';
-      if (!p.publish) badges += '<span class="badge gray">未发布</span>';
+      if (!p.publish) badges += '<span class="badge gray">' + t('unpublished') + '</span>';
       if (p.category) badges += '<span class="badge green">' + escapeHtml(p.category) + '</span>';
 
       var verCount = g.versions.length;
@@ -246,13 +375,13 @@
           '<span class="pkg-name">' + highlight(p.name, tokens) + '</span>' +
           badges +
         '</div>' +
-        '<p class="pkg-desc">' + highlight(p.description || '暂无描述', tokens) + '</p>' +
+        '<p class="pkg-desc">' + highlight(p.description || t('noDesc'), tokens) + '</p>' +
         (keywords ? '<div class="pkg-tags">' + keywords + '</div>' : '') +
         '<div class="pkg-meta">' +
           '<span>' + escapeHtml(p.host) + '/' + escapeHtml(p.owner) + '/' + escapeHtml(p.repo) + '</span>' +
           (p.license ? '<span class="dot">' + escapeHtml(p.license) + '</span>' : '') +
-          '<span class="dot">' + (p.publish ? '已发布' : '未发布') + '</span>' +
-          (verCount > 1 ? '<span class="dot">' + verCount + ' 个版本</span>' : '') +
+          '<span class="dot">' + (p.publish ? t('published') : t('unpublished')) + '</span>' +
+          (verCount > 1 ? '<span class="dot">' + t('versionCount', { n: verCount }) + '</span>' : '') +
         '</div>' +
       '</button>';
     }).join('');
@@ -384,14 +513,14 @@
         '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>' +
         '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>' +
         '</svg>' +
-        '<div>从左侧选择一个包<br />查看完整 package 信息与快照</div>' +
+        '<div>' + t('emptyDetail') + '</div>' +
         '</div>';
       return;
     }
 
     var tokens = tokensOf(state.q);
     var compiler = p.compiler || {};
-    var emptyDep = '<span style="color:#b6bbc9">无</span>';
+    var emptyDep = '<span style="color:var(--is-empty)">' + t('none') + '</span>';
     var deps = (p.dependencies || []).map(function (d) {
       return '<span class="dep">' + escapeHtml(d) + '</span>';
     }).join('') || emptyDep;
@@ -400,7 +529,7 @@
     }).join('') || emptyDep;
 
     var linkLibs = Array.isArray(compiler['link-libs']) && compiler['link-libs'].length
-      ? compiler['link-libs'].map(escapeHtml).join(', ') : '无';
+      ? compiler['link-libs'].map(escapeHtml).join(', ') : t('none');
     var keywords = (p.keywords || []).map(function (k) {
       return '<span class="tag">' + highlight(k, tokens) + '</span>';
     }).join('');
@@ -422,7 +551,7 @@
         '<div class="detail-head">' +
           '<div class="detail-title-row">' +
             '<h2 class="detail-name">' + highlight(p.name, tokens) + '</h2>' +
-            '<button class="detail-close" id="detailClose" type="button" aria-label="关闭详情">' +
+            '<button class="detail-close" id="detailClose" type="button" aria-label="' + t('closeDetail') + '">' +
               '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>' +
             '</button>' +
           '</div>' +
@@ -431,13 +560,13 @@
           '</div>' +
           (p.description ? '<p class="detail-desc">' + highlight(p.description, tokens) + '</p>' : '') +
           '<div class="detail-versions">' +
-            '<div class="detail-section-title">版本</div>' +
+            '<div class="detail-section-title">' + t('version') + '</div>' +
             '<div class="ver-list">' + verChips + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="detail-links">' +
           '<div class="install-note">' +
-            '<p class="install-note-text">如果还没有 <code>no</code>，需要先安装：一键安装（macOS / Linux / Windows Git Bash）会自动下载最新的 <code>no</code> 到 <code>$HOME/.local/bin</code>。</p>' +
+            '<p class="install-note-text">' + t('installNote') + '</p>' +
             '<div class="install-cmd">' +
               '<button class="copy-btn install-cmd-btn" type="button" data-cmd="' + escapeHtml(NO_INSTALL_CMD) + '">' +
                 '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
@@ -446,55 +575,55 @@
             '</div>' +
           '</div>' +
           '<div class="detail-links-btns">' +
-            copyBtn('no install ' + pkgRef(p), '安装可执行文件') +
-            copyBtn('no add ' + pkgRef(p), '导入包') +
+            copyBtn('no install ' + pkgRef(p), t('installBin')) +
+            copyBtn('no add ' + pkgRef(p), t('importPkg')) +
           '</div>' +
         '</div>' +
         '<div class="detail-body">' +
           '<div class="detail-section">' +
-            '<h3 class="detail-section-title">基本信息</h3>' +
+            '<h3 class="detail-section-title">' + t('basicInfo') + '</h3>' +
             '<dl class="kv">' +
-              kvRow('包名', escapeHtml(p.name), true) +
-              kvRow('版本', escapeHtml(p.repoVersion), true) +
-              kvRow('仓库', repoUrlOf(p)
+              kvRow(t('pkgName'), escapeHtml(p.name), true) +
+              kvRow(t('version'), escapeHtml(p.repoVersion), true) +
+              kvRow(t('repo'), repoUrlOf(p)
                 ? '<a class="inline-link" href="' + escapeHtml(repoUrlOf(p)) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(repoUrlOf(p)) + '</a>'
                 : '') +
-              kvRow('主页', p.homepage
+              kvRow(t('homepage'), p.homepage
                 ? '<a class="inline-link" href="' + escapeHtml(p.homepage) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(p.homepage) + '</a>'
                 : '') +
-              '<dt>关键词</dt><dd><div class="pkg-tags" style="margin:0">' + (keywords || emptyDep) + '</div></dd>' +
-              kvRow('分类', escapeHtml(p.category || '')) +
-              kvRow('许可证', escapeHtml(p.license || '')) +
-              kvRow('发布状态', p.publish ? '已发布' : '未发布') +
+              '<dt>' + t('keywords') + '</dt><dd><div class="pkg-tags" style="margin:0">' + (keywords || emptyDep) + '</div></dd>' +
+              kvRow(t('category'), escapeHtml(p.category || '')) +
+              kvRow(t('license'), escapeHtml(p.license || '')) +
+              kvRow(t('publishStatus'), p.publish ? t('published') : t('unpublished')) +
             '</dl>' +
           '</div>' +
           '<div class="detail-section">' +
-            '<h3 class="detail-section-title">作者</h3>' +
+            '<h3 class="detail-section-title">' + t('author') + '</h3>' +
             '<dl class="kv">' +
-              kvRow('作者', escapeHtml(p.author || '')) +
-              kvRow('邮箱', escapeHtml(p.email || '')) +
-              kvRow('组织', escapeHtml(p.organization || '')) +
+              kvRow(t('author'), escapeHtml(p.author || '')) +
+              kvRow(t('email'), escapeHtml(p.email || '')) +
+              kvRow(t('org'), escapeHtml(p.organization || '')) +
             '</dl>' +
           '</div>' +
           '<div class="detail-section">' +
-            '<h3 class="detail-section-title">依赖</h3>' +
+            '<h3 class="detail-section-title">' + t('depsSection') + '</h3>' +
             '<dl class="kv">' +
               '<dt>dependencies</dt><dd><div class="dep-list">' + deps + '</div></dd>' +
               '<dt>dev-deps</dt><dd><div class="dep-list">' + devDeps + '</div></dd>' +
             '</dl>' +
           '</div>' +
           '<div class="detail-section">' +
-            '<h3 class="detail-section-title">编译选项</h3>' +
+            '<h3 class="detail-section-title">' + t('compilerSection') + '</h3>' +
             '<dl class="kv">' +
               kvRow('compiler', escapeHtml(compiler.version || ''), true) +
               kvRow('link-libs', linkLibs, true) +
-              kvRow('匿名函数类型', compiler['anonymous-fn-type'] === true ? '开启' : '关闭') +
+              kvRow(t('anonFnType'), compiler['anonymous-fn-type'] === true ? t('enabled') : t('disabled')) +
               kvRow('output', escapeHtml(p.output || ''), true) +
               kvRow('ignore', (p.ignore || []).length ? escapeHtml(p.ignore.join(', ')) : '', true) +
             '</dl>' +
           '</div>' +
           '<div class="detail-section">' +
-            '<h3 class="detail-section-title">快照</h3>' +
+            '<h3 class="detail-section-title">' + t('snapshotSection') + '</h3>' +
             '<div class="snapshot-path">' +
               (releaseUrl
                 ? '<a class="inline-link" href="' + escapeHtml(releaseUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(releaseUrl) + '</a>'
@@ -557,8 +686,8 @@
 
   function showDetailLoading(name) {
     detailPane.innerHTML =
-      '<div class="detail-card"><div class="detail-empty" style="padding:40px 0">正在加载 ' +
-      escapeHtml(name) + ' 的详情…</div></div>';
+      '<div class="detail-card"><div class="detail-empty" style="padding:40px 0">' +
+      t('loadingDetail', { name: escapeHtml(name) }) + '</div></div>';
     if (isMobileDetail()) {
       detailPane.classList.add('open');
       ensureBackdrop().classList.add('show');
@@ -567,7 +696,7 @@
 
   function showDetailError(err) {
     detailPane.innerHTML =
-      '<div class="detail-card"><div class="detail-empty" style="padding:40px 0">加载失败：' +
+      '<div class="detail-card"><div class="detail-empty" style="padding:40px 0">' + t('loadFailed') + ': ' +
       escapeHtml(String((err && err.message) || err || '')) + '</div></div>';
   }
 
@@ -708,6 +837,26 @@
     renderResults();
   });
 
+  // ---------- 主题切换（暗 / 亮；偏好写入 localStorage，图标由 CSS 按 data-theme 切换） ----------
+  function applyTheme(theme) {
+    if (document.documentElement) document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('nohub-theme', theme); } catch (e) { /* file:// 等场景忽略 */ }
+  }
+
+  if (themeToggle) {
+    themeToggle.addEventListener('click', function () {
+      var next = document.documentElement && document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+    });
+  }
+
+  // ---------- 语言切换（重渲染全部界面文案；偏好写入 localStorage） ----------
+  if (langSelect) {
+    langSelect.addEventListener('change', function () {
+      applyLang(langSelect.value);
+    });
+  }
+
   resultsEl.addEventListener('click', function (e) {
     var card = e.target.closest('.pkg');
     if (!card) return;
@@ -724,13 +873,13 @@
       var original = btn.innerHTML;
       copyText(cmd).then(function () {
         btn.classList.add('copied');
-        btn.textContent = '已复制';
+        btn.textContent = t('copied');
         setTimeout(function () {
           btn.classList.remove('copied');
           btn.innerHTML = original;
         }, 1400);
       }).catch(function () {
-        btn.textContent = '复制失败';
+        btn.textContent = t('copyFailed');
         setTimeout(function () {
           btn.innerHTML = original;
         }, 1400);
@@ -754,7 +903,7 @@
     loadVersion(group, rec).then(function (record) {
       selectPackage(record);
     }).catch(function () {
-      chip.textContent = '加载失败';
+      chip.textContent = t('loadFailed');
       setTimeout(renderDetail, 1200);
     });
   });
@@ -768,7 +917,7 @@
 
   $('#emptyReset').addEventListener('click', function () {
     searchInput.value = '';
-    state.category = '全部';
+    state.category = CAT_ALL;
     searchClear.hidden = true;
     renderChips();
     onSearch();
@@ -805,7 +954,7 @@
   // ---------- gh-pages 数据加载（fetch + noml 解析） ----------
   function fetchText(url) {
     return fetch(url, { cache: 'no-cache' }).then(function (res) {
-      if (!res.ok) throw new Error(url + ' 加载失败（HTTP ' + res.status + '）');
+      if (!res.ok) throw new Error(t('httpFailed', { url: url, status: res.status }));
       return res.text();
     });
   }
@@ -896,10 +1045,10 @@
 
   /** 按需加载某个历史版本的 package.noml，解析成完整记录并缓存 */
   function loadVersion(group, rec) {
-    if (!group) return Promise.reject(new Error('缺少包分组信息'));
+    if (!group) return Promise.reject(new Error(t('noGroup')));
     if (rec.entry && !rec.entry.listOnly) return Promise.resolve(rec.entry);
     if (rec.loading) return rec.loading;
-    if (!rec.snapshot) return Promise.reject(new Error('缺少快照地址'));
+    if (!rec.snapshot) return Promise.reject(new Error(t('noSnapshot')));
     var parts = group.repoKey.split('/');
     var p = fetchText(rec.snapshot).then(function (text) {
       var pkg = window.NOML.parse(text) || {};
@@ -929,7 +1078,7 @@
    *   3. 切换历史版本时再按需 fetch 对应快照
    */
   function loadNomlIndex() {
-    if (!window.NOML) return Promise.reject(new Error('noml.js 未加载，无法解析数据'));
+    if (!window.NOML) return Promise.reject(new Error(t('nomlMissing')));
     return fetchText('index.noml')
       .then(function (text) { return window.NOML.parse(text); })
       .then(function (manifest) {
@@ -952,7 +1101,7 @@
     var empty = document.getElementById('emptyState');
     if (empty) empty.hidden = false;
     var title = document.querySelector('.empty-title');
-    if (title) title.textContent = '数据加载失败';
+    if (title) title.textContent = t('dataLoadFailed');
     var sub = document.querySelector('.empty-sub');
     if (sub) sub.textContent = String((err && err.message) || err || '');
   }
@@ -960,6 +1109,8 @@
   // ---------- 启动 ----------
   function boot() {
     buildGroups();
+    applyLang(detectLang(), false);
+    if (langSelect) langSelect.value = state.lang;
     renderHeader();
     renderChips();
     renderResults();
@@ -969,7 +1120,7 @@
 
   function startNoml() {
     var metaEl = document.getElementById('resultsMeta');
-    if (metaEl) metaEl.textContent = '正在加载 noml 数据…';
+    if (metaEl) metaEl.textContent = t('loadingNoml');
     loadNomlIndex().then(function (idx) {
       INDEX = idx;
       PKGS = idx.packages || [];
