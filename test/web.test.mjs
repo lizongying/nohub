@@ -422,10 +422,11 @@ test('?package= 深链：非法引用不打开详情并清除地址栏参数', a
 test('gh-pages 工作流发布根级 noml 数据', () => {
   const yml = fs.readFileSync(path.join(ROOT, '.github/workflows/sync.yml'), 'utf8');
   assert.match(yml, /noml\.js/, 'gh-pages 应发布 web/noml.js');
-  assert.match(yml, /web\/index\.noml" > index\.noml/, 'gh-pages 应发布根级 index.noml');
-  assert.match(yml, /latest\.noml" > latest\.noml/, 'gh-pages 应发布根级 latest.noml');
-  assert.match(yml, /git archive "\$SRC" packages workspaces \| tar -x/, 'gh-pages 应解包 packages 与 workspaces 到根级');
-  assert.match(yml, /git add[^\n]*web\/noml\.js/, '回写快照应把 web/noml.js 一并提交');
+  assert.match(yml, /cp web\/index\.noml "\$STAGE\/index\.noml"/, 'gh-pages 应发布根级 index.noml');
+  assert.match(yml, /cp latest\.noml "\$STAGE\/latest\.noml"/, 'gh-pages 应发布根级 latest.noml');
+  assert.match(yml, /cp -R packages workspaces state "\$STAGE\/"/, 'gh-pages 应打包 packages、workspaces 与 state');
+  assert.match(yml, /cp -R "\$STAGE"\/packages "\$STAGE"\/workspaces "\$STAGE"\/state \./, 'gh-pages 应发布 packages、workspaces 与 state 到根级');
+  assert.match(yml, /git show origin\/gh-pages:state\/sync\.noml/, '同步前应从 gh-pages 恢复 state');
   assert.match(yml, /for f in index\.html app\.js styles\.css noml\.js i18n\.js;/, 'gh-pages 应发布 web/i18n.js');
   assert.match(yml, /paths: \[[^\]]*web\/i18n\.js/, 'i18n.js 变更应触发同步');
 });
