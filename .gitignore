@@ -38,3 +38,4 @@ workspaces
 state
 latest.noml
 web/data.js
+web/index.noml
