@@ -23,7 +23,7 @@ on:
   push:
     branches: [main]
     # repos/** 变更后即时同步；web/** 仅改页面时也要重新发布到 gh-pages
-    paths: ['repos/**', 'web/index.html', 'web/app.js', 'web/styles.css', 'web/noml.js']
+    paths: ['repos/**', 'web/index.html', 'web/app.js', 'web/styles.css', 'web/noml.js', 'web/i18n.js']
 
 permissions:
   contents: write
@@ -69,7 +69,7 @@ jobs:
           git fetch --depth 1 origin +refs/heads/gh-pages:refs/remotes/origin/gh-pages
           git checkout -B gh-pages origin/gh-pages
           git rm -rf -q . || true
-          for f in index.html app.js styles.css noml.js; do git show "$SRC:web/$f" > "$f"; done
+          for f in index.html app.js styles.css noml.js i18n.js; do git show "$SRC:web/$f" > "$f"; done
           git show "$SRC:latest.noml" > latest.noml
           git show "$SRC:web/index.noml" > index.noml
           git archive "$SRC" packages workspaces | tar -x

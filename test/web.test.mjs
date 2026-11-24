@@ -182,9 +182,13 @@ test('web/app.js 走 fetch + noml 解析路径（首屏只加载 index.noml，�
   assert.match(app, /fetchText\(base \+ 'latest\.noml'\)/, '延迟加载应请求包级 latest.noml 版本索引');
   assert.match(app, /fetchText\(base \+ defaultVersion \+ '\/package\.noml'\)/, '延迟加载应请求默认版本 package.noml');
   assert.match(app, /fetchText\(rec\.snapshot\)/, 'app.js 应在切换版本时按需 fetch package.noml');
-  assert.match(app, /GROUP_LIST\.length \+ '<\/b> 个包/, '顶部统计应按包分组计数');
+  assert.match(app, /t\('pkgUnit', \{ n: GROUP_LIST\.length \}\)/, '顶部统计应按包分组计数（走 i18n 复数文案）');
   assert.match(app, /NOML\.parse/, 'app.js 应调用 NOML.parse 解析 noml');
   assert.match(html, /<script src="noml\.js"><\/script>/, 'index.html 应引入 noml.js');
+  assert.match(html, /<script src="i18n\.js"><\/script>/, 'index.html 应引入 i18n.js');
+  assert.match(app, /var DEFAULT_LANG = 'zh-TW';/, '默认语言应为繁体中文');
+  assert.match(html, /<html lang="zh-TW">/, 'index.html 默认 html lang 应为 zh-TW');
+  assert.match(html, /<option value="zh-TW" selected>/, '下拉框默认选中繁体中文');
   assert.doesNotMatch(html, /<script src="data\.js"><\/script>/, 'index.html 不应静态引入 data.js');
   assert.match(app, /dataScript\.src = 'data\.js'/, 'data.js 应仅在本地预览时动态注入');
 });
@@ -241,6 +245,8 @@ async function runApp({ search, local, index }) {
   sandbox.window = sandbox;
   if (local) sandbox.NOHUB_INDEX = index;
   vm.createContext(sandbox);
+  // i18n.js 在浏览器里总是先于 app.js 加载，测试沙箱同样如此
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'web/i18n.js'), 'utf8'), sandbox);
   if (!local) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, 'web/noml.js'), 'utf8'), sandbox);
   }
@@ -251,6 +257,11 @@ async function runApp({ search, local, index }) {
     historyCalls,
     listeners: el('q#results').listeners,
     detailListeners: el('q#detailPane').listeners,
+    // 语言切换测试用：直接读元素当前渲染结果
+    langSelect: el('q#langSelect'),
+    headerStats: el('q#headerStats'),
+    resultsMeta: el('q#resultsMeta'),
+    chips: el('q#chips'),
   };
 }
 
@@ -415,4 +426,70 @@ test('gh-pages 工作流发布根级 noml 数据', () => {
   assert.match(yml, /latest\.noml" > latest\.noml/, 'gh-pages 应发布根级 latest.noml');
   assert.match(yml, /git archive "\$SRC" packages workspaces \| tar -x/, 'gh-pages 应解包 packages 与 workspaces 到根级');
   assert.match(yml, /git add[^\n]*web\/noml\.js/, '回写快照应把 web/noml.js 一并提交');
+  assert.match(yml, /for f in index\.html app\.js styles\.css noml\.js i18n\.js;/, 'gh-pages 应发布 web/i18n.js');
+  assert.match(yml, /paths: \[[^\]]*web\/i18n\.js/, 'i18n.js 变更应触发同步');
+});
+
+test('web/i18n.js 十种语言齐全且键与简中一致', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'web/i18n.js'), 'utf8');
+  const sandbox = {};
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox);
+  const i18n = sandbox.NOHUB_I18N;
+  assert.ok(i18n, 'i18n.js 应暴露 window.NOHUB_I18N');
+  const langs = ['zh-CN', 'zh-TW', 'ja', 'ko', 'en', 'fr', 'ru', 'de', 'es', 'pt-BR'];
+  // 跨 realm 数组原型不同，用 JSON 归一化后比较
+  assert.deepEqual(JSON.parse(JSON.stringify(i18n.languages)), langs, '应支持十种语言');
+  for (const lang of langs) {
+    assert.ok(i18n.labels[lang], `${lang} 应有下拉框自称`);
+    assert.ok(i18n.htmlLang[lang], `${lang} 应有 html lang 映射`);
+    assert.ok(i18n.strings[lang] && typeof i18n.strings[lang] === 'object', `${lang} 应有文案表`);
+  }
+  const baseKeys = Object.keys(i18n.strings['zh-CN']).sort();
+  assert.ok(baseKeys.length >= 50, '简中文案应覆盖界面全部键');
+  for (const lang of langs) {
+    assert.deepEqual(
+      Object.keys(i18n.strings[lang]).sort(),
+      baseKeys,
+      `${lang} 的键应与简中完全一致`,
+    );
+    for (const k of baseKeys) {
+      const v = i18n.strings[lang][k];
+      if (typeof v === 'string') assert.ok(v.trim(), `${lang}.${k} 不应为空串`);
+    }
+  }
+});
+
+test('语言切换：重渲染统计、chips 与结果计数', async () => {
+  // 5 个包分组：验证 en 复数 packages 与 ru 复数 пакетов（n=5 → many）
+  const base = localIndex().packages[0];
+  const index = {
+    generatedAt: base.version, source: 'test', count: 5,
+    packages: ['glossary', 'alpha', 'beta', 'gamma', 'delta'].map((name) => ({ ...base, name })),
+  };
+  const res = await runApp({ local: true, index, search: '' });
+  assert.match(res.headerStats.innerHTML, /個套件/, '默认应为繁体中文');
+  assert.match(res.resultsMeta.innerHTML, /共 <b>5<\/b> 個套件/, '默认繁中结果统计');
+
+  const setLang = (code) => {
+    res.langSelect.value = code;
+    res.langSelect.listeners.change();
+  };
+
+  setLang('en');
+  assert.match(res.headerStats.innerHTML, />5<\/b> packages</, '英文统计应为复数 packages');
+  assert.match(res.chips.innerHTML, />All</, '英文「全部」chip 应为 All');
+  assert.match(res.resultsMeta.innerHTML, /packages in total/, '英文结果统计应为复数');
+  assert.equal(res.langSelect.value, 'en', '选择器应同步为当前语言');
+
+  setLang('ja');
+  assert.match(res.headerStats.innerHTML, /パッケージ/, '日文统计应为 パッケージ');
+  assert.match(res.chips.innerHTML, />すべて</, '日文「全部」chip 应为 すべて');
+
+  setLang('ru');
+  assert.match(res.headerStats.innerHTML, /пакетов/, '俄文统计应为复数 пакетов');
+
+  setLang('zh-CN');
+  assert.match(res.headerStats.innerHTML, /个包/, '切回简中应恢复');
+  assert.equal(res.langSelect.value, 'zh-CN', '选择器应同步为当前语言');
 });
