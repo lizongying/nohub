@@ -1,0 +1,422 @@
+; nohub PR 校验器（Nolang 实现）
+;
+; 校验 PR 对 repos/<host>/<owner>.noml 的改动是否满足准入条件：
+;   1. 作者：PR 作者 login（小写归一）等于文件路径里的 <owner>
+;   2. 仓库存在：<host>/<owner>/<repo> 真实公开可访问
+;   3. 工作区存在：仓库根有 workspace.noml（对象条目可用 workspace 覆盖）
+;   4. 至少一个 package：workspace.noml 是顶层对象且至少有一个键
+;
+; 输入（命令行参数，顺序固定）：
+;   argv[1] = PR 作者 GitHub login
+;   argv[2] = 改动过的作者记录文件，逗号分隔（相对仓库根）
+;   argv[3] = 可选，仓库根目录（缺省用环境变量 NOHUB_ROOT，再缺省 '.')
+;
+; 网络抓取：默认走 std/net/http（CI 直连 GitHub）。设置环境变量
+;   NOHUB_VALIDATE_FIXTURE=<dir> 时改为读本地 fixture（离线自测用），
+;   fixture 布局：<dir>/api/<owner>/<repo>.json 与 <dir>/raw/<owner>/<repo>/<path>。
+
+# std/args
+# std/env
+# std/fs
+# std/noml
+# std/net/http
+
+; ---------------------------------------------------------------------------
+; 结构
+; ---------------------------------------------------------------------------
+
+tally {
+    pass i64
+    fail i64
+}
+
+; ---------------------------------------------------------------------------
+; 基础工具（全部显式传参，不依赖运行时修改的全局变量）
+; ---------------------------------------------------------------------------
+
+; 读取环境变量字符串，未设置返回缺省值
+env-or = (key str, fallback str) (out str) {
+    v = env.get(key)
+    out = fallback
+    v: {
+        ok -> out = it
+
+        nil || err -> _
+    }
+}
+
+; 读取文本，失败返回空串
+read-text = (path str) (text str) {
+    text = ''
+    r = fs.read-str(path)
+    r: {
+        ok -> text = it
+
+        nil || err -> _
+    }
+}
+
+; 取文件名（去掉目录），再去掉末尾的 .noml 得到 owner
+owner-of-file = (file str) (owner str) {
+    parts = file.split('/')
+    n = parts.len()
+    last = parts[n - 1]
+    name = file
+    last: {
+        ok -> name = it
+
+        nil || err -> name = file
+    }
+    name.len-bytes() > 5 -> {
+        owner = name.slice-bytes(0, name.len-bytes() - 5)
+        return
+    }
+    owner = name
+}
+
+; 取 host：repos/<host>/<owner>.noml 的中段
+host-of-file = (file str) (host str) {
+    host = 'github.com'
+    parts = file.split('/')
+    parts.len() >= 2 -> {
+        h = parts[1]
+        h: {
+            ok -> host = it
+
+            nil || err -> host = 'github.com'
+        }
+    }
+}
+
+; fixture 模式下把 URL 映射到本地文件
+fetch-fixture = (url str, fx str) (body str, status i64) {
+    body = ''
+    status = 0
+    path = ''
+    {
+        url.starts-with('https://api.github.com/repos/') -> {
+            rest = url.slice-bytes('https://api.github.com/repos/'.len-bytes(), url.len-bytes())
+            path = fx - '/api/' - rest - '.json'
+        }
+
+        url.starts-with('https://raw.githubusercontent.com/') -> {
+            rest = url.slice-bytes('https://raw.githubusercontent.com/'.len-bytes(), url.len-bytes())
+            parts = rest.split('/HEAD/')
+            parts.len() >= 2 -> {
+                p0 = parts[0]
+                p1 = parts[1]
+                p0: {
+                    ok -> {
+                        a = it
+                        p1: {
+                            ok -> path = fx - '/raw/' - a - '/' - it
+
+                            nil || err -> status = 0
+                        }
+                    }
+
+                    nil || err -> status = 0
+                }
+            }
+        }
+    }
+    ok = fs.exists(path)
+    {
+        ok -> {
+            body = read-text(path)
+            status = 200
+        }
+
+        ! ok -> status = 404
+    }
+}
+
+; 从 URL 取 HTTP 响应；fx 非空时读 fixture
+fetch = (url str, fx str) (status i64, body str) {
+    status = 0
+    body = ''
+    {
+        fx.len-bytes() > 0 -> {
+            body, status = fetch-fixture(url, fx)
+        }
+
+        fx.len-bytes() == 0 -> {
+            resp = http.get(url)
+            resp: {
+                nil -> status = 0
+
+                err -> status = 0
+
+                ok -> {
+                    status = it.status-code
+                    body = it.body
+                }
+            }
+        }
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 报告（用 struct 累加，规避全局按值捕获）
+; ---------------------------------------------------------------------------
+
+record = (t tally, ok bool, title str, detail str) {
+    {
+        ok -> {
+            print('PASS ' - title)
+            v = t.pass + 1
+            v: {
+                ok -> t.pass = it
+
+                nil || err -> _
+            }
+        }
+
+        ! ok -> {
+            print('FAIL ' - title - ' — ' - detail)
+            v = t.fail + 1
+            v: {
+                ok -> t.fail = it
+
+                nil || err -> _
+            }
+        }
+    }
+}
+
+; 把 ?str 安全追加到 []str
+push-opt-str = (arr []str, o ?str) (pushed bool) {
+    pushed = false
+    o: {
+        ok -> {
+            v = it
+            arr.push(v)
+            pushed = true
+        }
+
+        nil || err -> _
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 单项校验
+; ---------------------------------------------------------------------------
+
+; 解析作者记录为仓库短名数组
+parse-repos = (raw str, names []str) (fatal str) {
+    fatal = ''
+    r = noml.parse(raw)
+    r: {
+        ok -> {
+            d = it
+            d.is-arr() == false -> {
+                fatal = '顶层必须是数组'
+                return
+            }
+            p = d.node-pool
+            n = d.len()
+            i <- [0..n): {
+                e = d.at(i)
+                idx = -1
+                e: {
+                    ok -> idx = it
+
+                    nil || err -> idx = -1
+                }
+                {
+                    idx < 0 -> fatal = '元素无法解析'
+
+                    p.is-str(idx) -> {
+                        pushed = push-opt-str(names, p.val-str(idx))
+                        ! pushed -> fatal = '字符串元素读取失败'
+                    }
+
+                    p.is-obj(idx) -> {
+                        no = p.get(idx, 'name')
+                        ni = -1
+                        no: {
+                            ok -> ni = it
+
+                            nil || err -> ni = -1
+                        }
+                        {
+                            ni < 0 -> fatal = '对象元素缺少 name'
+
+                            ni >= 0 -> {
+                                pushed = push-opt-str(names, p.val-str(ni))
+                                ! pushed -> fatal = '对象元素 name 非字符串'
+                            }
+                        }
+                    }
+
+                    -> fatal = '元素既不是字符串也不是对象'
+                }
+            }
+        }
+
+        nil || err -> fatal = 'noml 解析失败'
+    }
+}
+
+; 校验单个仓库：存在 + workspace.noml + 至少一个 package
+check-repo = (host str, owner str, repo str, ws-path str, fx str, t tally) {
+
+    ; 仓库存在
+    api-url = 'https://api.github.com/repos/' - owner - '/' - repo
+    api-status, api-body = fetch(api-url, fx)
+    {
+        api-status == 200 -> record(t, true, '仓库存在 ' - owner - '/' - repo, '')
+
+        api-status != 200 -> record(t, false, '仓库存在 ' - owner - '/' - repo, 'HTTP ' - api-status.to-str() - ' ' - api-url)
+    }
+
+    ; workspace.noml 存在
+    rel = ws-path
+    {
+        ws-path.starts-with('/') -> rel = ws-path.slice-bytes(1, ws-path.len-bytes())
+
+        ws-path.starts-with('/') == false -> rel = ws-path
+    }
+    raw-url = 'https://raw.githubusercontent.com/' - owner - '/' - repo - '/HEAD/' - rel
+    ws-status, ws-body = fetch(raw-url, fx)
+    {
+        ws-status != 200 -> {
+            record(t, false, '工作区存在 ' - owner - '/' - repo, 'HTTP ' - ws-status.to-str() - ' ' - raw-url)
+            record(t, false, '至少一个 package ' - owner - '/' - repo, '工作区缺失')
+            return
+        }
+
+        ws-status == 200 -> record(t, true, '工作区存在 ' - owner - '/' - repo, '')
+    }
+
+    ; 至少一个 package（workspace.noml 是对象且至少有一个键）
+    wr = noml.parse(ws-body)
+    wr: {
+        ok -> {
+            d = it
+            {
+                d.is-obj() == false -> record(t, false, '至少一个 package ' - owner - '/' - repo, 'workspace.noml 顶层不是对象')
+
+                d.is-obj() -> {
+                    npkg = d.len()
+                    {
+                        npkg > 0 -> record(t, true, '至少一个 package ' - owner - '/' - repo, '')
+
+                        npkg <= 0 -> record(t, false, '至少一个 package ' - owner - '/' - repo, 'workspace.noml 没有任何包')
+                    }
+                }
+            }
+        }
+
+        nil || err -> record(t, false, '至少一个 package ' - owner - '/' - repo, 'workspace.noml 解析失败')
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 主流程
+; ---------------------------------------------------------------------------
+
+argc = args.count()
+pr-author = ''
+files-raw = ''
+root = '.'
+
+argc > 1 -> {
+    a = args.get(1)
+    a: {
+        ok -> pr-author = it
+
+        nil || err -> _
+    }
+}
+argc > 2 -> {
+    a = args.get(2)
+    a: {
+        ok -> files-raw = it
+
+        nil || err -> _
+    }
+}
+argc > 3 -> {
+    a = args.get(3)
+    a: {
+        ok -> root = it
+
+        nil || err -> _
+    }
+}
+
+fx = env-or('NOHUB_VALIDATE_FIXTURE', '')
+{
+    root == '.' -> root = env-or('NOHUB_ROOT', '.')
+}
+
+t tally
+t = tally{}
+t.pass = 0
+t.fail = 0
+
+print('nohub PR validation')
+print('author=' - pr-author - '  files=' - files-raw)
+print('')
+
+{
+    pr-author.len-bytes() == 0 -> record(t, false, '参数 PR 作者', 'argv[1] 为空')
+
+    files-raw.len-bytes() == 0 -> record(t, false, '参数改动文件', 'argv[2] 为空')
+}
+
+files = files-raw.split(',')
+
+f <- files: {
+    file = f
+    {
+        file.len-bytes() == 0 -> _
+
+        file.len-bytes() > 0 -> {
+            owner = owner-of-file(file)
+            host = host-of-file(file)
+            full = root - '/' - file
+            raw = read-text(full)
+
+            ; 作者校验（大小写不敏感）
+            is-author = pr-author.to-lower() == owner.to-lower()
+            {
+                is-author -> record(t, true, '作者 ' - file, '')
+
+                ! is-author -> record(t, false, '作者 ' - file, 'PR 作者 ' - pr-author - ' != 路径 owner ' - owner)
+            }
+
+            ; 作者记录解析
+            names []str
+            names = []str
+            fatal = ''
+            {
+                raw.len-bytes() == 0 -> fatal = '文件读取失败或为空：' - full
+
+                raw.len-bytes() > 0 -> fatal = parse-repos(raw, names)
+            }
+            {
+                fatal.len-bytes() > 0 -> record(t, false, '作者记录解析 ' - file, fatal)
+
+                fatal.len-bytes() == 0 -> {
+                    {
+                        names.len() == 0 -> record(t, false, '作者记录非空 ' - file, '数组为空')
+
+                        names.len() > 0 -> record(t, true, '作者记录非空 ' - file, '')
+                    }
+                    repo <- names: {
+                        check-repo(host, owner, repo, '/workspace.noml', fx, t)
+                    }
+                }
+            }
+        }
+    }
+}
+
+print('')
+print('result: PASS=' - t.pass.to-str() - ' FAIL=' - t.fail.to-str())
+{
+    t.fail > 0 -> exit(1)
+    exit(0)
+}

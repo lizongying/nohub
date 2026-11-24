@@ -1,0 +1,58 @@
+name: validate
+
+# PR 准入校验：改动 repos/** 时，用 Nolang 校验器检查四项要求
+#   1. 作者：PR 作者 login == 路径 <owner>（大小写不敏感）
+#   2. 仓库存在：<host>/<owner>/<repo> 真实公开
+#   3. 仓库根有 workspace.noml（对象条目可用 workspace 覆盖）
+#   4. 至少一个 package：workspace.noml 是对象且非空
+# 校验失败则 PR 检查红，阻止合并。校验器源码在 validate/main.no，离线测试 validate/tests/run.sh。
+
+on:
+  pull_request:
+    paths: ['repos/**']
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 安装 Nolang 编译器
+        uses: lizongying/nolang/.github/actions/setup-nolang@main
+        with:
+          version: 'v0.4.32'
+
+      # 取本次 PR 相对 base 改动的作者记录文件（相对仓库根，逗号分隔）。
+      # 只看 Added/Modified；删除的文件无需校验存在性。
+      - name: 收集改动的作者记录
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          files=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- 'repos/**' | grep -E '^repos/[^/]+/[^/]+\.noml$' || true)
+          files=$(printf '%s' "$files" | paste -sd, - || true)
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+          echo "changed repos files: $files"
+
+      - name: 构建校验器
+        run: no build -o "$RUNNER_TEMP/nohub-validate" validate/main.no
+
+      - name: 运行准入校验
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+        run: |
+          set -e
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "没有需要校验的作者记录文件"
+            exit 0
+          fi
+          "$RUNNER_TEMP/nohub-validate" "$PR_AUTHOR" "$CHANGED_FILES" "$GITHUB_WORKSPACE"
