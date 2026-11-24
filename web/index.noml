@@ -1,14 +1,14 @@
 ; 由 web/build.mjs 自动生成，请勿手动修改。
 ; 重新生成：node web/build.mjs
 {
-  generated-at: '2026-11-23T02:03:44.994Z'
+  generated-at: '2026-11-24T00:50:17.130Z'
   source: 'nohub packages/ 目录快照'
   packages: [
     {
       name: 'glossary'
-      tag: 'v0.4.29'
+      tag: 'v0.4.31'
       repo: 'github.com/lizongying/nolang'
-      version: 'v0.4.29'
+      version: 'v0.4.31'
       description: 'Nolang 词条化知识库：类型、注解、关键字、语法构造、std 模块与陷阱的 CLI + MCP 检索前端'
       keywords: [
         'nolang',
@@ -138,9 +138,9 @@
     },
     {
       name: 'noui'
-      tag: 'v0.4.29'
+      tag: 'v0.4.31'
       repo: 'github.com/lizongying/nolang'
-      version: 'v0.4.29'
+      version: 'v0.4.31'
       description: 'GPUI 精神内核的 Nolang 实现 —— 可运行纵切面'
       keywords: []
       category: ''
@@ -173,9 +173,9 @@
     },
     {
       name: 'test'
-      tag: 'v0.4.29'
+      tag: 'v0.4.31'
       repo: 'github.com/lizongying/nolang'
-      version: 'v0.4.29'
+      version: 'v0.4.31'
       description: 'A new Nolang project'
       keywords: [
         'nolang',
@@ -189,9 +189,9 @@
     },
     {
       name: 'test1'
-      tag: 'v0.4.29'
+      tag: 'v0.4.31'
       repo: 'github.com/lizongying/nolang'
-      version: 'v0.4.29'
+      version: 'v0.4.31'
       description: ''
       keywords: []
       category: ''
@@ -203,9 +203,9 @@
     },
     {
       name: 'test2'
-      tag: 'v0.4.29'
+      tag: 'v0.4.31'
       repo: 'github.com/lizongying/nolang'
-      version: 'v0.4.29'
+      version: 'v0.4.31'
       description: 'A new Nolang project'
       keywords: []
       category: ''
