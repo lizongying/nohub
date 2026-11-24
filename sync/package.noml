@@ -1,0 +1,16 @@
+{
+  name: 'sync'
+  version: '0.1.0'
+  description: 'Nolang implementation of nohub sync'
+  license: 'MIT'
+  ; 预编 AST 依赖：<tool>:<version>@<host>/<owner>/<repo> 会拆成
+  ; key=nogit@github.com/lizongying/notools、version=v0.1.38，编译器从
+  ; notools release 的 nogit-ast.zip 取回模块（见 core.no 的 # nogit/...）。
+  dependencies: ['nogit:v0.1.38@github.com/lizongying/notools']
+  compiler: {
+    version: 'v0.4.32'
+    link-libs: []
+  }
+  output: '/dist'
+  ignore: []
+}

@@ -1,0 +1,2057 @@
+; nohub sync — Nolang 实现
+;
+; 与 bin/nohub.mjs + lib/*.mjs 参考实现逐项对齐：
+;   - noml 解析/序列化只用 std/noml
+;   - 远端 refs 通过 nogit/src/remote（v0.1.36 增量模块）
+;   - 所有文件读写、清理、状态、输出格式与 Node 一致
+;
+; 测试注入：opts.test-root 非空时，HTTP 与 ls-remote 改读本地 fixture。
+
+# nogit/src/remote
+# nogit/src/httpclient
+
+; ---------------------------------------------------------------------------
+; 数据结构
+; ---------------------------------------------------------------------------
+
+opts {
+    root str
+    filter str
+    dry-run bool
+    force bool
+    now str
+    test-root str
+    strict bool
+}
+
+filter {
+    host str
+    owner str
+    repo str
+    raw str
+}
+
+author {
+    host str
+    owner str
+    name str
+    branch str
+    workspace str
+    status str
+}
+
+semver {
+    full str
+    major i64
+    minor i64
+    patch i64
+    pre str
+    has-pre bool
+    ok bool
+}
+
+version {
+    name str
+    commit str
+    ref str
+    major i64
+    minor i64
+    patch i64
+    pre str
+}
+
+one-report {
+    host str
+    owner str
+    repo str
+    status str
+    version str
+    branch str
+    packages []str
+    skipped []str
+    warnings []str
+    error str
+    reason str
+    commit str
+    ref str
+    versions []str
+    cached i64
+}
+
+report {
+    filter str
+    repos []one-report
+    removed []str
+    errors i64
+    partial i64
+    warnings i64
+    latest-count i64
+    latest-changed bool
+    state-written bool
+    ok bool
+}
+
+; ---------------------------------------------------------------------------
+; 通用小工具（Nolang 的整数加法返回 ?i64，统一在这里解包）
+; ---------------------------------------------------------------------------
+
+add-i = (a i64, b i64) (r i64) {
+
+    #{overflow=wrap}
+    t = a + b
+    r = t: {
+        ok -> it
+
+        -> a
+    }
+}
+
+sub-i = (a i64, b i64) (r i64) {
+
+    #{overflow=wrap}
+    t = a - b
+    r = t: {
+        ok -> it
+
+        -> a
+    }
+}
+
+arr-str = (arr []str, i i64) (out str) {
+    out = ''
+    r = arr[i]
+    r: {
+        ok -> out = it
+
+        nil || err -> _
+    }
+}
+
+contains-str = (arr []str, want str) (yes bool) {
+    yes = false
+    v <- arr: {
+        {
+            v == want -> yes = true
+        }
+    }
+}
+
+last-at = (s str) (pos i64) {
+    pos = -1
+    i <- [0..s.len-bytes()): {
+        ch = s.slice-bytes(i, add-i(i, 1))
+        {
+            ch == '@' -> pos = i
+        }
+    }
+}
+
+key-of = (item str) (out str) {
+    out = ''
+    pos = last-at(item)
+    {
+        pos >= 0 -> out = item.slice-bytes(add-i(pos, 1), item.len-bytes())
+    }
+}
+
+pool-get-str = (p noml.pool, idx i64, key str) (val str, found bool) {
+    val = ''
+    found = false
+    o = p.get-str(idx, key)
+    o: {
+        ok -> {
+            val = it
+            found = true
+        }
+
+        nil || err -> _
+    }
+}
+
+get-str-array = (p noml.pool, idx i64, key str) (arr []str) {
+    child = p.get(idx, key)
+    child: {
+        ok -> {
+            n = p.len(it)
+            i <- [0..n): {
+                e = p.at(it, i)
+                e: {
+                    ok -> {
+                        s, got = pool-str(p, it)
+                        {
+                            got -> arr.push(s)
+                        }
+                    }
+
+                    nil || err -> _
+                }
+            }
+        }
+
+        nil || err -> _
+    }
+}
+
+arr-version = (arr []version, i i64) (out version) {
+    out = version{}
+    r = arr[i]
+    r: {
+        ok -> out = it
+
+        nil || err -> _
+    }
+}
+
+to-int = (s str) (v i64) {
+    v = 0
+    o = s.to-i64()
+    o: {
+        ok -> v = it
+
+        nil || err -> _
+    }
+}
+
+join-path = (a str, b str) (out str) {
+    {
+        a.ends-with('/') -> out = a.slice-bytes(0, sub-i(a.len-bytes(), 1))
+
+        -> out = a
+    }
+    {
+        b.starts-with('/') -> out = out - b
+
+        -> out = out - '/' - b
+    }
+}
+
+read-text = (file str) (text str, ok bool) {
+    text = ''
+    ok = false
+    r = fs.read-str(file)
+    r: {
+        ok -> {
+            text = it
+            ok = true
+        }
+
+        nil || err -> _
+    }
+}
+
+; 跨模块调用时 read-text 的第一个返回值会退化为 0 值，测试统一用包装入口。
+read-text-result = (file str) (text str, ok bool) {
+    text, ok = read-text(file)
+}
+
+ensure-dir = (dir str) {
+    parts = dir.split('/')
+    cur = ''
+    part <- parts: {
+        {
+            part.len-bytes() > 0 -> {
+                cur == '' -> {
+                    dir.starts-with('/') -> cur = '/'
+                }
+                cur.len-bytes() > 0 && ! cur.ends-with('/') -> cur = cur - '/'
+                cur = cur - part
+                fs.is-dir(cur) == false -> {
+                    p = path{}
+                    p.p = cur
+                    p.make-dir()
+                }
+            }
+        }
+    }
+}
+
+remove-tree = (target str) {
+    {
+        fs.is-dir(target) -> {
+            names = fs.dir-entries(target)
+            name <- names: {
+                remove-tree(target - '/' - name)
+            }
+            fs.rmdir(target)
+        }
+
+        -> {
+            fs.is-file(target) -> fs.remove(target)
+        }
+    }
+}
+
+dir-of = (file str) (out str) {
+    pos = -1
+    i <- [0..file.len-bytes()): {
+        ch = file.slice-bytes(i, add-i(i, 1))
+        {
+            ch == '/' -> pos = i
+        }
+    }
+    out = ''
+    pos > 0 -> out = file.slice-bytes(0, pos)
+    pos == 0 -> out = '/'
+}
+
+write-if-changed = (file str, text str) (changed bool) {
+    changed = false
+    old, exists = read-text(file)
+    {
+        exists && old == text -> return
+    }
+    ensure-dir(dir-of(file))
+    fs.write-str(file, text)
+    changed = true
+}
+
+pad2 = (n i64) (out str) {
+    out = n.to-str()
+    n < 10 -> out = '0' - out
+}
+
+now-iso = (override str) (out str) {
+    out = override
+    out.len-bytes() > 0 -> return
+    t = time.now-time()
+    d = t.date()
+    out = d.year.to-str() - '-' - pad2(d.month) - '-' - pad2(d.day)
+    out = out - 'T' - pad2(d.hour) - ':' - pad2(d.min) - ':' - pad2(d.sec) - '.000Z'
+}
+
+; ---------------------------------------------------------------------------
+; noml 小工具
+; ---------------------------------------------------------------------------
+
+doc-str = (d noml.doc, key str) (val str, found bool) {
+    val = ''
+    found = false
+    o = d.get-str(key)
+    o: {
+        ok -> {
+            val = it
+            found = true
+        }
+
+        nil || err -> _
+    }
+}
+
+pool-str = (p noml.pool, idx i64) (val str, found bool) {
+    val = ''
+    found = false
+    o = p.val-str(idx)
+    o: {
+        ok -> {
+            val = it
+            found = true
+        }
+
+        nil || err -> _
+    }
+}
+
+copy-node = (src noml.pool, dst noml.doc, idx i64) (out i64) {
+    k = src.kind(idx)
+    {
+        k == NOML-KIND-STR -> {
+            s, ok = pool-str(src, idx)
+            out = dst.new-str(s)
+        }
+
+        k == NOML-KIND-NUM -> {
+            num-opt = src.val-num(idx)
+            out = num-opt: {
+                ok -> dst.new-num(it)
+
+                -> dst.new-num(0.0)
+            }
+        }
+
+        k == NOML-KIND-BOOL -> {
+            b = src.val-bool(idx)
+            out = b: {
+                ok -> dst.new-bool(it)
+
+                -> dst.new-bool(false)
+            }
+        }
+
+        k == NOML-KIND-ARR -> {
+            out = dst.new-arr()
+            arr-n i64 = src.len(idx)
+            i <- [0..arr-n): {
+                c = src.at(idx, i)
+                c: {
+                    ok -> {
+                        cc = copy-node(src, dst, it)
+                        dst.push(out, cc)
+                    }
+
+                    nil || err -> _
+                }
+            }
+        }
+
+        k == NOML-KIND-OBJ -> {
+            out = dst.new-obj()
+            obj-n i64 = src.len(idx)
+            i <- [0..obj-n): {
+                key-opt = src.key(idx, i)
+                key-opt: {
+                    ok -> {
+                        key = it
+                        c = src.get(idx, key)
+                        c: {
+                            ok -> {
+                                cc = copy-node(src, dst, it)
+                                dst.put(out, key, cc)
+                            }
+
+                            nil || err -> _
+                        }
+                    }
+
+                    nil || err -> _
+                }
+            }
+        }
+
+        -> out = dst.new-nil()
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 语义化版本
+; ---------------------------------------------------------------------------
+
+parse-semver = (s str) (v semver) {
+    v.ok = false
+    v.major = 0
+    v.minor = 0
+    v.patch = 0
+    v.pre = ''
+    v.has-pre = false
+    name = s
+    {
+        name.starts-with('v') -> name = name.slice-bytes(1, name.len-bytes())
+    }
+    plus = name.find-byte-from('+', 0)
+    {
+        plus >= 0 -> name = name.slice-bytes(0, plus)
+    }
+    dash = name.find-byte-from('-', 0)
+    core = name
+    {
+        dash >= 0 -> {
+            core = name.slice-bytes(0, dash)
+            v.pre = name.slice-bytes(add-i(dash, 1), name.len-bytes())
+            v.has-pre = v.pre.len-bytes() > 0
+        }
+    }
+    parts = core.split('.')
+    {
+        parts.len() == 3 -> {
+            a = parts[0]: {
+                ok -> it
+
+                -> ''
+            }
+            b = parts[1]: {
+                ok -> it
+
+                -> ''
+            }
+            c = parts[2]: {
+                ok -> it
+
+                -> ''
+            }
+            v.major = to-int(a)
+            v.minor = to-int(b)
+            v.patch = to-int(c)
+            num-ok = a.len-bytes() > 0 && b.len-bytes() > 0 && c.len-bytes() > 0
+            {
+                v.has-pre -> num-ok = num-ok && v.pre.len-bytes() > 0
+            }
+            {
+                num-ok -> v.ok = true
+            }
+        }
+    }
+}
+
+cmp-str = (a str, b str) (cmp i64) {
+    cmp = 0
+    n = a.len-bytes()
+    {
+        b.len-bytes() < n -> n = b.len-bytes()
+    }
+    i <- [0..n): {
+        {
+            cmp == 0 -> {
+                ab = a.byte(i)
+                bb = b.byte(i)
+                av = 0
+                bv = 0
+                ab: {
+                    ok -> av = it
+
+                    nil || err -> _
+                }
+                bb: {
+                    ok -> bv = it
+
+                    nil || err -> _
+                }
+                cmp = sub-i(av, bv)
+            }
+        }
+    }
+    {
+        cmp == 0 -> {
+            a.len-bytes() < b.len-bytes() -> cmp = -1
+
+            a.len-bytes() > b.len-bytes() -> cmp = 1
+        }
+    }
+}
+
+is-digit-str = (s str) (yes bool) {
+    yes = s.len-bytes() > 0
+    i <- [0..s.len-bytes()): {
+        ch = s.slice-bytes(i, add-i(i, 1))
+        yes = yes && cmp-str(ch, '0') >= 0 && cmp-str(ch, '9') <= 0
+    }
+}
+
+compare-prerelease = (a str, b str) (cmp i64) {
+    cmp = 0
+    a == b -> return
+    a.len-bytes() == 0 -> {
+        cmp = 1
+        return
+    }
+    b.len-bytes() == 0 -> {
+        cmp = -1
+        return
+    }
+    aparts = a.split('.')
+    bparts = b.split('.')
+    n = aparts.len()
+    bparts.len() > n -> n = bparts.len()
+    i <- [0..n): {
+        cmp != 0 -> continue
+        x = aparts[i]: {
+            ok -> it
+
+            nil || err -> ''
+        }
+        y = bparts[i]: {
+            ok -> it
+
+            nil || err -> ''
+        }
+        i >= aparts.len() -> {
+            cmp = -1
+            continue
+        }
+        i >= bparts.len() -> {
+            cmp = 1
+            continue
+        }
+        {
+            x == y -> _
+
+            -> {
+                xn = is-digit-str(x)
+                yn = is-digit-str(y)
+                {
+                    xn && yn -> cmp = sub-i(to-int(x), to-int(y))
+
+                    xn -> cmp = -1
+
+                    yn -> cmp = 1
+
+                    cmp-str(x, y) < 0 -> cmp = -1
+
+                    -> cmp = 1
+                }
+            }
+        }
+    }
+}
+
+compare-semver-str = (a str, b str) (cmp i64) {
+    va = parse-semver(a)
+    vb = parse-semver(b)
+    cmp = 0
+    va.major != vb.major -> {
+        cmp = sub-i(va.major, vb.major)
+        return
+    }
+    va.minor != vb.minor -> {
+        cmp = sub-i(va.minor, vb.minor)
+        return
+    }
+    va.patch != vb.patch -> {
+        cmp = sub-i(va.patch, vb.patch)
+        return
+    }
+    cmp = compare-prerelease(va.pre, vb.pre)
+}
+
+; ---------------------------------------------------------------------------
+; refs / 版本
+; ---------------------------------------------------------------------------
+
+ref-get = (names str, shas str, count i64, want str) (sha str) {
+    sha = ''
+    n-list = names.split('\n')
+    s-list = shas.split('\n')
+    i <- [0..count): {
+        {
+            sha.len-bytes() == 0 -> {
+                nm = n-list[i]: {
+                    ok -> it
+
+                    -> ''
+                }
+                {
+                    nm == want -> {
+                        sha = s-list[i]: {
+                            ok -> it
+
+                            -> ''
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+ref-has = (names str, shas str, count i64, want str) (yes bool) {
+    yes = ref-get(names, shas, count, want).len-bytes() > 0
+}
+
+list-versions = (names str, shas str, count i64) (vs []version, n i64) {
+    n-list = names.split('\n')
+    s-list = shas.split('\n')
+    i <- [0..count): {
+        nm = n-list[i]: {
+            ok -> it
+
+            nil || err -> ''
+        }
+        {
+            nm.starts-with('refs/tags/') -> {
+                full = nm.slice-bytes(10, nm.len-bytes())
+                {
+                    full.ends-with('^{}') -> _
+
+                    -> {
+                        sv = parse-semver(full)
+                        {
+                            sv.ok -> {
+                                commit = ref-get(names, shas, count, nm - '^{}')
+                                {
+                                    commit.len-bytes() == 0 -> commit = s-list[i]: {
+                                        ok -> it
+
+                                        -> ''
+                                    }
+                                }
+                                v = version{}
+                                v.name = full
+                                v.commit = commit
+                                v.ref = full
+                                v.major = sv.major
+                                v.minor = sv.minor
+                                v.patch = sv.patch
+                                v.pre = sv.pre
+                                vs.push(v)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    n = vs.len()
+    i <- [0..n): {
+        j <- [0..sub-i(n, add-i(i, 1))): {
+            {
+                compare-semver-str(vs[j].name, vs[j + 1].name) > 0 -> {
+                    tmp = vs[j]
+                    vs[j] = vs[j + 1]
+                    vs[j + 1] = tmp
+                }
+            }
+        }
+    }
+}
+
+normalize-filter = (raw str) (f filter) {
+    text = raw.trim()
+    f.raw = text
+    parts = text.split('/')
+    n = parts.len()
+    {
+        n >= 3 -> {
+            f.host = parts[0]: {
+                ok -> it
+
+                -> ''
+            }
+            f.owner = parts[1]: {
+                ok -> it
+
+                -> ''
+            }
+            f.repo = parts[2]: {
+                ok -> it
+
+                -> ''
+            }
+        }
+
+        n == 2 -> {
+            f.host = 'github.com'
+            f.owner = parts[0]: {
+                ok -> it
+
+                -> ''
+            }
+            f.repo = parts[1]: {
+                ok -> it
+
+                -> ''
+            }
+        }
+
+        n == 1 -> {
+            f.host = 'github.com'
+            f.owner = parts[0]: {
+                ok -> it
+
+                -> ''
+            }
+        }
+    }
+}
+
+author-from-node = (p noml.pool, idx i64, host str, owner str) (a author, ok bool) {
+    a.host = host
+    a.owner = owner
+    a.status = 'active'
+    {
+        p.is-str(idx) -> {
+            name, got = pool-str(p, idx)
+            {
+                got -> {
+                    a.name = name
+                    ok = true
+                }
+            }
+        }
+
+        p.is-obj(idx) -> {
+            name, got = pool-get-str(p, idx, 'name')
+            {
+                got -> {
+                    a.name = name
+                    bt, bok = pool-get-str(p, idx, 'branch')
+                    a.branch = bt
+                    wt, wok = pool-get-str(p, idx, 'workspace')
+                    a.workspace = wt
+                    st, sgot = pool-get-str(p, idx, 'status')
+                    {
+                        sgot && st == 'paused' -> a.status = 'paused'
+                    }
+                    ok = true
+                }
+            }
+        }
+    }
+}
+
+parse-author-file = (file str, host str, owner str) (authors []author, err str) {
+    content, ok = read-text(file)
+    ! ok -> {
+        err = '作者记录 ' - file - ' 读取失败'
+        return
+    }
+    r = noml.parse(content)
+    r: {
+        ok -> {
+            d = it
+            d.is-arr() == false -> {
+                err = '作者记录 ' - file - ' 顶层必须是数组'
+                return
+            }
+            p = d.node-pool
+            n = d.len()
+            i <- [0..n): {
+                e = d.at(i)
+                idx = -1
+                e: {
+                    ok -> idx = it
+
+                    nil || err -> idx = -1
+                }
+                {
+                    idx >= 0 -> {
+                        a, good = author-from-node(p, idx, host, owner)
+                        {
+                            good -> authors.push(a)
+                        }
+                    }
+                }
+            }
+        }
+
+        nil || err -> err = '作者记录 ' - file - ' 解析失败'
+    }
+}
+
+load-authors = (repos-dir str, f filter) (authors []author, err str) {
+    fs.is-dir(repos-dir) == false -> return
+    hosts = fs.dir-entries(repos-dir)
+    hi <- [0..hosts.len()): {
+        host = arr-str(hosts, hi)
+        f.host.len-bytes() > 0 && f.host != host -> continue
+        host-dir = join-path(repos-dir, host)
+        fs.is-dir(host-dir) == false -> continue
+        files = fs.dir-entries(host-dir)
+        fi <- [0..files.len()): {
+            file = arr-str(files, fi)
+            file.ends-with('.noml') == false -> continue
+            owner = file.slice-bytes(0, sub-i(file.len-bytes(), 5))
+            f.owner.len-bytes() > 0 && f.owner != owner -> continue
+            path = join-path(host-dir, file)
+            more, e = parse-author-file(path, host, owner)
+            e.len-bytes() > 0 -> {
+                err = e
+                return
+            }
+            au <- more: {
+                authors.push(au)
+            }
+        }
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 网络 / fixture
+; ---------------------------------------------------------------------------
+
+make-url = (host str, owner str, repo str, ref str, repo-path str) (out str) {
+    p = repo-path
+    {
+        p.starts-with('/') -> p = p.slice-bytes(1, p.len-bytes())
+    }
+    {
+        host == 'github.com' -> out = 'https://raw.githubusercontent.com/' - owner - '/' - repo - '/' - ref - '/' - p
+
+        -> out = 'https://' - host - '/' - owner - '/' - repo - '/raw/' - ref - '/' - p
+    }
+}
+
+fetch-http-text = (url str) (content str, status i64, err str) {
+    status, content, err, ok = httpclient.fetch(url, 'nohub-sync')
+    {
+        ok && status != 200 -> err = 'HTTP ' - status.to-str() - ' ' - url
+    }
+}
+
+fetch-repo-file = (o opts, host str, owner str, repo str, ref str, repo-path str) (content str, status i64, err str) {
+    content = ''
+    status = 200
+    err = ''
+    {
+        o.test-root.len-bytes() > 0 -> {
+
+            ; ref-files/<ref>/<host>/<owner>/<repo>/<path> 可覆盖公共 files。
+            ; 若 ref 目录存在但文件缺失，直接返回 404，用于模拟旧 tag 没有清单。
+            ref-root = join-path(o.test-root, 'ref-files')
+            ref-dir = join-path(ref-root, ref)
+            scoped = join-path(ref-dir, host)
+            scoped = join-path(scoped, owner)
+            scoped = join-path(scoped, repo)
+            scoped = join-path(scoped, repo-path)
+            scoped-text, scoped-ok = read-text(scoped)
+            {
+                scoped-ok -> content = scoped-text
+
+                -> {
+                    fs.is-dir(ref-dir) -> status = 404
+
+                    -> {
+                        root = join-path(o.test-root, 'files')
+                        root = join-path(root, host)
+                        root = join-path(root, owner)
+                        root = join-path(root, repo)
+                        file = join-path(root, repo-path)
+                        text, ok = read-text(file)
+                        {
+                            ok -> content = text
+
+                            -> status = 404
+                        }
+                    }
+                }
+            }
+        }
+
+        -> {
+            url = make-url(host, owner, repo, ref, repo-path)
+            content, status, err = fetch-http-text(url)
+            {
+                status != 200 && host == 'github.com' && url.contains('/raw/') == false -> {
+                    alt = 'https://github.com/' - owner - '/' - repo - '/raw/' - ref - '/' - repo-path
+                    alt.starts-with('https://github.com/' - owner - '/' - repo - '/raw//') -> alt = alt
+                    content, status, err = fetch-http-text(alt)
+                }
+            }
+        }
+    }
+}
+
+ls-remote-for = (o opts, url str) (names str, shas str, count i64, branch str, err str, ok bool) {
+    names = ''
+    shas = ''
+    count = 0
+    branch = ''
+    err = ''
+    ok = false
+    {
+        o.test-root.len-bytes() > 0 -> {
+            raw, found = read-text(join-path(o.test-root, 'refs.txt'))
+            {
+                found -> {
+                    names, shas, count, branch, ok = remote.parse-ls-remote(raw)
+                }
+
+                -> err = 'missing refs.txt'
+            }
+        }
+
+        -> {
+            names, shas, count, branch, err, ok = remote.list-remote-refs(url)
+        }
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 清单校验与单版本同步
+; ---------------------------------------------------------------------------
+
+manifest {
+    key str
+    rel-path str
+    raw str
+    name str
+    version str
+}
+
+resolve-tag = (pkg noml.doc, repo-version str) (out str) {
+    out = ''
+    version, found = doc-str(pkg, 'version')
+    {
+        ! found || version.len-bytes() == 0 -> version = repo-version
+    }
+    pattern, has-pattern = doc-str(pkg, 'tag_pattern')
+    {
+        has-pattern && pattern.len-bytes() > 0 -> {
+            out = pattern.split('{version}').join(version)
+            return
+        }
+    }
+    prefix, has-prefix = doc-str(pkg, 'tag_prefix')
+    {
+        has-prefix && prefix.len-bytes() > 0 -> out = prefix - version
+
+        -> out = version
+    }
+}
+
+arr-manifest = (arr []manifest, i i64) (out manifest) {
+    out = manifest{}
+    r = arr[i]
+    r: {
+        ok -> out = it
+
+        nil || err -> _
+    }
+}
+
+check-manifest-doc = (d noml.doc, m manifest, names str, shas str, count i64, repo-version str) (ok bool, err str, version str, warnings []str) {
+    ok = false
+    version = repo-version
+    d.is-obj() == false -> {
+        err = m.rel-path - '/package.noml 顶层必须是对象'
+        return
+    }
+    name, found = doc-str(d, 'name')
+    ! found || name.trim().len-bytes() == 0 -> {
+        err = m.rel-path - '/package.noml 缺少合法的 name'
+        return
+    }
+    name != m.key -> {
+        err = '包名不一致：workspace 键 "' - m.key - '" 与 package.noml 的 name "' - name - '" 不符'
+        return
+    }
+    ver-opt = d.get('version')
+    ver-opt: {
+        ok -> {
+            vstr, got = doc-str(d, 'version')
+            sv = parse-semver(vstr)
+            ! got || sv.ok == false -> {
+                err = 'package.noml 的 version 不是语义化版本：' - vstr
+                return
+            }
+            version = vstr
+        }
+
+        nil || err -> version = repo-version
+    }
+    err.len-bytes() > 0 -> return
+    lic, has-lic = doc-str(d, 'license')
+    ! has-lic -> warnings.push('缺少 license')
+    has-lic && lic.trim().len-bytes() == 0 -> {
+        err = 'package.noml 的 license 必须是有效的 SPDX 标识字符串'
+        return
+    }
+    tp, has-tp = doc-str(d, 'tag_pattern')
+    tpfx, has-tpfx = doc-str(d, 'tag_prefix')
+    (has-tp && tp.len-bytes() > 0) || (has-tpfx && tpfx.len-bytes() > 0) -> {
+        tag = resolve-tag(d, version)
+        ref-has(names, shas, count, 'refs/tags/' - tag) == false -> warnings.push('tag "' - tag - '" 在仓库中不存在（version=' - version - '）')
+    }
+    ok = true
+}
+
+check-manifest = (m manifest, names str, shas str, count i64, repo-version str) (ok bool, err str, version str, warnings []str) {
+    ok = false
+    version = repo-version
+    r = noml.parse(m.raw)
+    r: {
+        ok -> {
+            ok, err, version, warnings = check-manifest-doc(it, m, names, shas, count, repo-version)
+        }
+
+        nil || err -> err = m.rel-path - '/package.noml 解析失败'
+    }
+}
+
+parse-workspace = (raw str) (keys []str, paths []str, fatal str) {
+    r = noml.parse(raw)
+    r: {
+        ok -> {
+            d = it
+            d.is-obj() == false -> {
+                fatal = 'workspace.noml 顶层必须是对象'
+                return
+            }
+            p = d.node-pool
+            n = d.len()
+            i <- [0..n): {
+                ko = d.key(i)
+                key = ''
+                ko: {
+                    ok -> key = it
+
+                    nil || err -> key = ''
+                }
+                ch = p.get(d.root, key)
+                idx = 0
+                ch: {
+                    ok -> idx = it
+
+                    nil || err -> idx = -1
+                }
+                {
+                    idx < 0 -> fatal = 'workspace.noml 里 "' - key - '" 的值必须是字符串（no build 要求纯映射）'
+
+                    p.is-str(idx) == false -> fatal = 'workspace.noml 里 "' - key - '" 的值必须是字符串（no build 要求纯映射）'
+
+                    -> {
+                        val, got = pool-str(p, idx)
+                        {
+                            ! got -> fatal = 'workspace.noml 里 "' - key - '" 的值必须是字符串（no build 要求纯映射）'
+
+                            val.starts-with('/') == false -> fatal = 'workspace.noml 里 "' - key - '" 的路径必须以 / 开头'
+
+                            -> {
+                                keys.push(key)
+                                paths.push(val)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        nil || err -> fatal = 'workspace.noml 解析失败'
+    }
+}
+
+fetch-manifest = (o opts, host str, owner str, name str, ref str, key str, rp str) (m manifest, fatal str) {
+    raw, st, e = fetch-repo-file(o, host, owner, name, ref, join-path(rp, 'package.noml'))
+    st != 200 -> {
+        fatal = e
+        return
+    }
+    m.key = key
+    m.rel-path = rp
+    m.raw = raw
+    m.name = key
+}
+
+do-version = (o opts, host str, owner str, name str, ver version, is-latest bool, workspace str, names str, shas str, count i64) (status str, packages []str, skipped []str, warnings []str, fatal str) {
+    status = 'ok'
+    ws-raw = ''
+    ws-status = 200
+    ws-err = ''
+    ws-raw, ws-status, ws-err = fetch-repo-file(o, host, owner, name, ver.ref, workspace)
+    ws-status != 200 && ws-status != 404 -> fatal = ws-err
+    fatal.len-bytes() > 0 -> return
+    has-ws = ws-status == 200
+
+    spec-keys []str
+    spec-paths []str
+    {
+        has-ws -> {
+            spec-keys, spec-paths, fatal = parse-workspace(ws-raw)
+        }
+    }
+    fatal.len-bytes() > 0 -> return
+
+    manifests []manifest
+    mi <- [0..spec-keys.len()): {
+        key = arr-str(spec-keys, mi)
+        rp = arr-str(spec-paths, mi)
+        m, e = fetch-manifest(o, host, owner, name, ver.ref, key, rp)
+        {
+            e.len-bytes() > 0 -> fatal = e
+
+            -> manifests.push(m)
+        }
+    }
+    {
+        spec-keys.len() == 0 -> {
+            raw, st, e = fetch-repo-file(o, host, owner, name, ver.ref, '/package.noml')
+            {
+                st == 404 -> {
+                    is-latest -> {
+                        status = 'error'
+                        fatal = '最新版本 ' - ver.name - ' 既没有 ' - workspace - ' 也没有根 package.noml'
+                    }
+                    is-latest == false -> {
+                        status = 'skipped'
+                        warnings.push(ver.name - ': 既没有 ' - workspace - ' 也没有根 package.noml，跳过该版本')
+                    }
+                    return
+                }
+
+                st != 200 -> fatal = e
+
+                st == 200 -> {
+                    r = noml.parse(raw)
+                    r: {
+                        ok -> {
+                            d = it
+                            pkg-name, found = doc-str(d, 'name')
+                            {
+                                ! found || pkg-name.len-bytes() == 0 -> fatal = '根目录 package.noml 缺少合法的 name'
+
+                                -> {
+                                    m = manifest{}
+                                    m.key = pkg-name
+                                    m.rel-path = '/'
+                                    m.raw = raw
+                                    m.name = pkg-name
+                                    manifests.push(m)
+                                }
+                            }
+                        }
+
+                        nil || err -> fatal = '根目录 package.noml 解析失败'
+                    }
+                }
+            }
+        }
+    }
+    fatal.len-bytes() > 0 -> return
+
+    written []manifest
+    for-m []manifest = manifests
+    ci <- [0..for-m.len()): {
+        m = arr-manifest(for-m, ci)
+        ok, err, pkg-version, ws = check-manifest(m, names, shas, count, ver.name)
+        {
+            ! ok -> {
+                skipped.push(ver.name - '\t' - m.key - '\t' - m.rel-path - '\t' - err)
+                warnings.push(ver.name - '/' - m.key - ': ' - err - '（已跳过该包）')
+            }
+
+            -> {
+                wi <- [0..ws.len()): {
+                    warnings.push(ver.name - '/' - m.key - ': ' - arr-str(ws, wi))
+                }
+                m.version = pkg-version
+                written.push(m)
+            }
+        }
+    }
+    written.len() == 0 -> {
+        is-latest -> {
+            status = 'error'
+            fatal = '所有包都未通过校验，已全部跳过'
+        }
+        is-latest == false -> {
+            status = 'skipped'
+            warnings.push(ver.name - ': 所有包都未通过校验，跳过该版本')
+        }
+        return
+    }
+
+    o.dry-run == false -> {
+        has-ws -> {
+            snap = join-path(o.root, 'workspaces')
+            snap = join-path(snap, host)
+            snap = join-path(snap, owner)
+            snap = join-path(snap, name)
+            snap = join-path(snap, ver.name)
+            write-if-changed(join-path(snap, 'workspace.noml'), ws-raw)
+        }
+        wi <- [0..written.len()): {
+            wm = arr-manifest(written, wi)
+            dir = join-path(o.root, 'packages')
+            dir = join-path(dir, wm.name)
+            dir = join-path(dir, host)
+            dir = join-path(dir, owner)
+            dir = join-path(dir, name)
+            dir = join-path(dir, ver.name)
+            write-if-changed(join-path(dir, 'package.noml'), wm.raw)
+        }
+    }
+    written.len() < manifests.len() -> status = 'partial'
+    pi <- [0..written.len()): {
+        wm = arr-manifest(written, pi)
+        packages.push(wm.name)
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 状态
+; ---------------------------------------------------------------------------
+
+state-entry {
+    key str
+    at str
+    status str
+    error str
+    has-error bool
+    repo-version str
+    commit str
+    branch str
+    versions []str
+    packages []str
+    skipped []str
+    warnings []str
+}
+
+load-state = (state-file str) (d noml.doc, root i64) {
+    d = noml.new()
+    root = d.new-obj()
+    d.set-root(root)
+    text, ok = read-text(state-file)
+    {
+        ok -> {
+            r = noml.parse(text)
+            r: {
+                ok -> {
+                    nd = it
+                    {
+                        nd.is-obj() || nd.len() > 0 -> {
+                            d = nd
+                            root = d.root
+                        }
+                    }
+                }
+
+                nil || err -> _
+            }
+        }
+    }
+}
+
+write-state = (o opts, old noml.doc, old-root i64, ups []state-entry) (written bool) {
+    written = false
+    {
+        o.dry-run -> return
+    }
+    nd = noml.new()
+    new-root = nd.new-obj()
+    nd.set-root(new-root)
+    old-p = old.node-pool
+    n = old-p.len(old-root)
+    i <- [0..n): {
+        key-opt = old-p.key(old-root, i)
+        key-opt: {
+            ok -> {
+                key = it
+                child = old-p.get(old-root, key)
+                skip = false
+                u <- ups: {
+                    {
+                        u.key == key -> skip = true
+                    }
+                }
+                {
+                    ! skip -> {
+                        child-idx = -1
+                        child: {
+                            ok -> child-idx = it
+
+                            nil || err -> child-idx = -1
+                        }
+                        child-idx >= 0 -> {
+                            cc = copy-node(old-p, nd, child-idx)
+                            nd.put(new-root, key, cc)
+                        }
+                    }
+                }
+            }
+
+            nil || err -> _
+        }
+    }
+    u <- ups: {
+        e = nd.new-obj()
+        nd.put(e, 'last-sync-at', nd.new-str(u.at))
+        nd.put(e, 'last-sync-status', nd.new-str(u.status))
+        {
+            u.has-error -> nd.put(e, 'last-sync-error', nd.new-str(u.error))
+
+            -> nd.put(e, 'last-sync-error', nd.new-nil())
+        }
+        nd.put(e, 'repo-version', nd.new-str(u.repo-version))
+        nd.put(e, 'commit', nd.new-str(u.commit))
+        nd.put(e, 'branch', nd.new-str(u.branch))
+        va = nd.new-arr()
+        v <- u.versions: {
+            nd.push(va, nd.new-str(v))
+        }
+        nd.put(e, 'versions', va)
+        pa = nd.new-arr()
+        pv <- u.packages: {
+            nd.push(pa, nd.new-str(pv))
+        }
+        nd.put(e, 'packages', pa)
+        sa = nd.new-arr()
+        sv <- u.skipped: {
+            parts = sv.split('\t')
+            so = nd.new-obj()
+            nd.put(so, 'version', nd.new-str(arr-str(parts, 0)))
+            nd.put(so, 'key', nd.new-str(arr-str(parts, 1)))
+            nd.put(so, 'path', nd.new-str(arr-str(parts, 2)))
+            nd.put(so, 'reason', nd.new-str(arr-str(parts, 3)))
+            nd.push(sa, so)
+        }
+        nd.put(e, 'skipped', sa)
+        wa = nd.new-arr()
+        wv <- u.warnings: {
+            nd.push(wa, nd.new-str(wv))
+        }
+        nd.put(e, 'warnings', wa)
+        nd.put(new-root, u.key, e)
+    }
+    file = join-path(o.root, 'state')
+    file = join-path(file, 'sync.noml')
+    written = write-if-changed(file, nd.stringify() - '\n')
+}
+
+; ---------------------------------------------------------------------------
+; 清理与 latest 汇总
+; ---------------------------------------------------------------------------
+
+prune = (o opts, live []str) (removed []str, removed-keys []str) {
+    removed-keys = []
+    base = join-path(o.root, 'workspaces')
+    hosts = fs.dir-entries(base)
+    host <- hosts: {
+        host-dir = join-path(base, host)
+        {
+            fs.is-dir(host-dir) -> {
+                owners = fs.dir-entries(host-dir)
+                owner <- owners: {
+                    owner-dir = join-path(host-dir, owner)
+                    {
+                        fs.is-dir(owner-dir) -> {
+                            repos = fs.dir-entries(owner-dir)
+                            repo <- repos: {
+                                dir = join-path(owner-dir, repo)
+                                {
+                                    fs.is-dir(dir) -> {
+                                        key = host - '/' - owner - '/' - repo
+                                        {
+                                            contains-str(live, key) == false -> {
+                                                removed.push('workspaces/' - key)
+                                                removed-keys.push(key)
+                                                {
+                                                    o.dry-run == false -> remove-tree(dir)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    pkgs = fs.dir-entries(join-path(o.root, 'packages'))
+    pkg <- pkgs: {
+        pkg-dir = join-path(o.root, 'packages')
+        pkg-dir = join-path(pkg-dir, pkg)
+        {
+            fs.is-dir(pkg-dir) -> {
+                hosts = fs.dir-entries(pkg-dir)
+                host <- hosts: {
+                    host-dir = join-path(pkg-dir, host)
+                    {
+                        fs.is-dir(host-dir) -> {
+                            owners = fs.dir-entries(host-dir)
+                            owner <- owners: {
+                                owner-dir = join-path(host-dir, owner)
+                                {
+                                    fs.is-dir(owner-dir) -> {
+                                        repos = fs.dir-entries(owner-dir)
+                                        repo <- repos: {
+                                            dir = join-path(owner-dir, repo)
+                                            {
+                                                fs.is-dir(dir) -> {
+                                                    key = host - '/' - owner - '/' - repo
+                                                    {
+                                                        contains-str(live, key) == false -> {
+                                                            removed.push('packages/' - pkg - '/' - key)
+                                                            removed-keys.push(key)
+                                                            {
+                                                                o.dry-run == false -> remove-tree(dir)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+rebuild-latest = (o opts, ups []str, removed []str) (count i64, changed bool) {
+    file = join-path(o.root, 'latest.noml')
+    existing []str
+    text, ok = read-text(file)
+    {
+        ok -> {
+            r = noml.parse(text)
+            r: {
+                ok -> {
+                    d = it
+                    {
+                        d.is-arr() -> {
+                            n = d.len()
+                            i <- [0..n): {
+                                e = d.at(i)
+                                e: {
+                                    ok -> {
+                                        p = d.node-pool
+                                        {
+                                            p.is-str(it) -> {
+                                                s, got = pool-str(p, it)
+                                                {
+                                                    got -> existing.push(s)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    nil || err -> _
+                                }
+                            }
+                        }
+                    }
+                }
+
+                nil || err -> _
+            }
+        }
+    }
+    up-keys []str
+    u <- ups: {
+        up-keys.push(key-of(u))
+    }
+    final []str
+    it0 <- existing: {
+        key = key-of(it0)
+        {
+            contains-str(removed, key) == false && contains-str(up-keys, key) == false -> final.push(it0)
+        }
+    }
+    u <- ups: {
+        final.push(u)
+    }
+    n = final.len()
+    i <- [0..n): {
+        j <- [0..sub-i(n, add-i(i, 1))): {
+            a = arr-str(final, j)
+            b = arr-str(final, add-i(j, 1))
+            {
+                ka = key-of(a)
+                kb = key-of(b)
+                cmp-str(ka, kb) > 0 -> {
+                    final[j]: {
+                        ok -> it = b
+
+                        -> _
+                    }
+                    final[j + 1]: {
+                        ok -> it = a
+
+                        -> _
+                    }
+                }
+                ka == kb && cmp-str(a, b) > 0 -> {
+                    final[j]: {
+                        ok -> it = b
+
+                        -> _
+                    }
+                    final[j + 1]: {
+                        ok -> it = a
+
+                        -> _
+                    }
+                }
+            }
+        }
+    }
+    d = noml.new()
+    arr = d.new-arr()
+    it1 <- final: {
+        d.push(arr, d.new-str(it1))
+    }
+    d.set-root(arr)
+    out = d.stringify() - '\n'
+    old, exists = read-text(file)
+    changed = ! exists || old != out
+    {
+        changed && o.dry-run == false -> write-if-changed(file, out)
+    }
+    count = final.len()
+}
+
+; ---------------------------------------------------------------------------
+; 包级索引
+; ---------------------------------------------------------------------------
+
+version-commit = (vs []version, name str) (out str) {
+    out = ''
+    v <- vs: {
+        {
+            v.name == name -> out = v.commit
+        }
+    }
+}
+
+write-indexes = (o opts, host str, owner str, name str, remote []version, pkgs []str, vers []str, commits []str) {
+    {
+        o.dry-run -> return
+    }
+    pi <- [0..pkgs.len()): {
+        pkg = arr-str(pkgs, pi)
+        file = join-path(o.root, 'packages')
+        file = join-path(file, pkg)
+        file = join-path(file, host)
+        file = join-path(file, owner)
+        file = join-path(file, name)
+        file = join-path(file, 'latest.noml')
+        ev []str
+        ec []str
+        text, ok = read-text(file)
+        {
+            ok -> {
+                r = noml.parse(text)
+                r: {
+                    ok -> {
+                        d = it
+                        versions-node = d.get('versions')
+                        versions-node: {
+                            ok -> {
+                                p = d.node-pool
+                                n = p.len(it)
+                                i <- [0..n): {
+                                    e = p.at(it, i)
+                                    e: {
+                                        ok -> {
+                                            ei = it
+                                            vn, got = pool-get-str(p, ei, 'version')
+                                            cn, cgot = pool-get-str(p, ei, 'commit')
+                                            {
+                                                got && version-commit(remote, vn).len-bytes() > 0 -> {
+                                                    ev.push(vn)
+                                                    {
+                                                        cgot -> ec.push(cn)
+
+                                                        -> ec.push('')
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        nil || err -> _
+                                    }
+                                }
+                            }
+
+                            nil || err -> _
+                        }
+                    }
+
+                    nil || err -> _
+                }
+            }
+        }
+        ii <- [0..pkgs.len()): {
+            {
+                arr-str(pkgs, ii) == pkg -> {
+                    v = arr-str(vers, ii)
+                    {
+                        contains-str(ev, v) == false -> {
+                            ev.push(v)
+                            ec.push(arr-str(commits, ii))
+                        }
+                    }
+                }
+            }
+        }
+        {
+            ev.len() == 0 -> continue
+        }
+        n = ev.len()
+        i <- [0..n): {
+            j <- [0..sub-i(n, add-i(i, 1))): {
+                {
+                    compare-semver-str(arr-str(ev, j), arr-str(ev, add-i(j, 1))) > 0 -> {
+                        a = arr-str(ev, j)
+                        b = arr-str(ev, add-i(j, 1)): {
+                            ok -> it
+
+                            -> ''
+                        }
+                        x = arr-str(ec, j)
+                        y = arr-str(ec, add-i(j, 1))
+                        ev[j]: {
+                            ok -> it = b
+
+                            -> _
+                        }
+                        ev[j + 1]: {
+                            ok -> it = a
+
+                            -> _
+                        }
+                        ec[j]: {
+                            ok -> it = y
+
+                            -> _
+                        }
+                        ec[j + 1]: {
+                            ok -> it = x
+
+                            -> _
+                        }
+                    }
+                }
+            }
+        }
+        d = noml.new()
+        o2 = d.new-obj()
+        top = arr-str(ev, sub-i(n, 1))
+        top-c = arr-str(ec, sub-i(n, 1))
+        d.put(o2, 'version', d.new-str(top))
+        d.put(o2, 'commit', d.new-str(top-c))
+        va = d.new-arr()
+        i <- [0..n): {
+            e = d.new-obj()
+            d.put(e, 'version', d.new-str(arr-str(ev, i)))
+            d.put(e, 'commit', d.new-str(arr-str(ec, i)))
+            d.push(va, e)
+        }
+        d.put(o2, 'versions', va)
+        d.set-root(o2)
+        write-if-changed(file, d.stringify() - '\n')
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 单仓库同步
+; ---------------------------------------------------------------------------
+
+sync-one = (o opts, sd noml.doc, sroot i64, host str, owner str, a author) (r one-report, touched i64, latest-touched bool, ups []str, state-ups []state-entry, idx-pkg []str, idx-ver []str, idx-commit []str) {
+    name = a.name
+    key = host - '/' - owner - '/' - name
+    r.host = host
+    r.owner = owner
+    r.repo = name
+    r.status = 'ok'
+    r.version = ''
+    r.branch = ''
+    r.error = ''
+    workspace = a.workspace
+    workspace.len-bytes() == 0 -> workspace = '/workspace.noml'
+
+    p = sd.node-pool
+    prior = p.get(sroot, key)
+    prior-ok = false
+    prior-idx = 0
+    prior: {
+        ok -> {
+            prior-ok = true
+            prior-idx = it
+        }
+
+        nil || err -> _
+    }
+    seen []str
+    prior-pkgs []str
+    retry-latest = false
+    {
+        prior-ok -> {
+            seen = get-str-array(p, prior-idx, 'versions')
+            prior-pkgs = get-str-array(p, prior-idx, 'packages')
+            st, found = pool-get-str(p, prior-idx, 'last-sync-status')
+            {
+                found && st == 'error' -> retry-latest = true
+            }
+        }
+    }
+
+    {
+        r.error.len-bytes() > 0 -> return
+    }
+
+    repo-url = 'https://' - host - '/' - owner - '/' - name
+    ls-names, ls-shas, ls-count, ls-branch, ls-err, ls-ok = ls-remote-for(o, repo-url)
+    {
+        ! ls-ok -> {
+            r.status = 'error'
+            r.error = ls-err
+            return
+        }
+    }
+    branch = a.branch
+    branch.len-bytes() == 0 -> branch = ls-branch
+    branch.len-bytes() == 0 -> branch = 'main'
+    r.branch = branch
+
+    vs []version
+    versions-count = 0
+    vs, versions-count = list-versions(ls-names, ls-shas, ls-count)
+    {
+        vs.len() == 0 -> {
+            head = ref-get(ls-names, ls-shas, ls-count, 'refs/heads/' - branch)
+            head.len-bytes() == 0 -> head = ref-get(ls-names, ls-shas, ls-count, 'HEAD')
+            {
+                head.len-bytes() == 0 -> {
+                    r.status = 'error'
+                    r.error = '无法解析仓库版本：既没有语义化 tag，也没有可用的 HEAD'
+                    return
+                }
+            }
+            v = version{}
+            v.name = head.slice-bytes(0, 7)
+            v.commit = head
+            v.ref = branch
+            vs.push(v)
+        }
+    }
+    vcount = vs.len()
+    for-vs []version = vs
+    vi <- [0..vcount): {
+        v = arr-version(for-vs, vi)
+        r.versions.push(v.name)
+    }
+    latest = arr-version(vs, sub-i(vcount, 1))
+    r.version = latest.name
+    r.commit = latest.commit
+    r.ref = latest.ref
+
+    latest-packages []str
+    vi <- [0..vcount): {
+        v = arr-version(vs, vi)
+        is-latest = vi == sub-i(vcount, 1)
+        cached = o.force == false && contains-str(seen, v.name) && (is-latest == false || ! retry-latest)
+        {
+            cached -> r.cached = add-i(r.cached, 1)
+
+            -> {
+                touched = add-i(touched, 1)
+                st, pkgs, skips, warns, fatal = do-version(o, host, owner, name, v, is-latest, workspace, ls-names, ls-shas, ls-count)
+                pi <- [0..pkgs.len()): {
+                    idx-pkg.push(arr-str(pkgs, pi))
+                    idx-ver.push(v.name)
+                    idx-commit.push(v.commit)
+                }
+                si <- [0..skips.len()): {
+                    r.skipped.push(arr-str(skips, si))
+                }
+                wi <- [0..warns.len()): {
+                    r.warnings.push(arr-str(warns, wi))
+                }
+                {
+                    fatal.len-bytes() > 0 -> {
+                        r.status = 'error'
+                        r.error = fatal
+                        r.packages = []
+                        r.skipped = []
+                        return
+                    }
+                }
+                {
+                    st == 'partial' -> r.status = 'partial'
+                }
+                {
+                    is-latest -> {
+                        latest-packages = pkgs
+                        latest-touched = true
+                    }
+                }
+            }
+        }
+    }
+    {
+        latest-packages.len() == 0 -> {
+            latest-packages = prior-pkgs
+        }
+    }
+    r.packages = latest-packages
+    write-indexes(o, host, owner, name, vs, idx-pkg, idx-ver, idx-commit)
+
+    {
+        touched > 0 || ! prior-ok -> {
+            e = state-entry{}
+            e.key = key
+            e.at = o.now
+            e.status = r.status
+            e.error = r.error
+            e.has-error = r.error.len-bytes() > 0
+            e.repo-version = r.version
+            e.commit = r.commit
+            e.branch = r.branch
+            e.versions = r.versions
+            e.packages = r.packages
+            e.skipped = r.skipped
+            e.warnings = r.warnings
+            state-ups.push(e)
+        }
+    }
+    {
+        (r.status == 'ok' || r.status == 'partial') -> {
+            latest-file = join-path(o.root, 'latest.noml')
+            _, latest-exists = read-text(latest-file)
+            {
+                latest-touched || ! latest-exists -> {
+                    pkg <- r.packages: {
+                        ups.push(pkg - ':' - r.version - '@' - key)
+                    }
+                }
+            }
+        }
+    }
+}
+
+; ---------------------------------------------------------------------------
+; 总入口
+; ---------------------------------------------------------------------------
+
+sync = (o opts) (rep report, fatal str) {
+    o.now = now-iso(o.now)
+    f = normalize-filter(o.filter)
+    rep.filter = f.raw
+    authors []author
+    aerr = ''
+    authors, aerr = load-authors(join-path(o.root, 'repos'), f)
+    {
+        aerr.len-bytes() > 0 -> {
+            fatal = aerr
+            return
+        }
+    }
+
+    sd = noml.new()
+    sroot = 0
+    sd, sroot = load-state(join-path(o.root, 'state/sync.noml'))
+    live []str
+    ups []str
+    removed-keys []str
+    state-ups []state-entry
+    a <- authors: {
+        {
+            f.repo.len-bytes() > 0 && f.repo != a.name -> _
+
+            -> {
+                key = a.host - '/' - a.owner - '/' - a.name
+                {
+                    a.status == 'paused' -> {
+                        r = one-report{}
+                        r.host = a.host
+                        r.owner = a.owner
+                        r.repo = a.name
+                        r.status = 'skipped'
+                        r.reason = 'paused'
+                        rep.repos.push(r)
+                    }
+
+                    -> {
+                        live.push(key)
+                        r = one-report{}
+                        touched i64 = 0
+                        latest-touched = false
+                        one-ups []str
+                        one-state []state-entry
+                        idx-pkg []str
+                        idx-ver []str
+                        idx-commit []str
+                        r, touched, latest-touched, one-ups, one-state, idx-pkg, idx-ver, idx-commit = sync-one(o, sd, sroot, a.host, a.owner, a)
+                        rep.repos.push(r)
+                        {
+                            r.status == 'ok' || r.status == 'partial' -> {
+                                u <- one-ups: {
+                                    ups.push(u)
+                                }
+                                r.status == 'partial' -> rep.partial = add-i(rep.partial, 1)
+                            }
+
+                            -> rep.errors = add-i(rep.errors, 1)
+                        }
+                        rep.warnings = add-i(rep.warnings, r.warnings.len())
+                        u <- one-state: {
+                            state-ups.push(u)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    {
+        f.raw.len-bytes() == 0 -> {
+            removed, removed-keys = prune(o, live)
+            it <- removed: {
+                rep.removed.push(it)
+            }
+        }
+    }
+    lc, lch = rebuild-latest(o, ups, removed-keys)
+    rep.latest-count = lc
+    rep.latest-changed = lch
+    rep.state-written = write-state(o, sd, sroot, state-ups)
+    rep.ok = rep.errors == 0 && rep.partial == 0
+}
+
+; 跨模块调用时 sync 这个短名会被解析器当作 0 返回值，
+; 单元测试统一走这个包装入口拿报告。
+sync-result = (o opts) (rep report, fatal str) {
+    rep, fatal = sync(o)
+}
+
+print-report = (rep report, o opts) {
+    out = '\nnohub sync'
+    rep.filter.len-bytes() > 0 -> out = out - ' ' - rep.filter
+    o.dry-run -> out = out - '（dry-run）'
+    out = out - '\n'
+    {
+        rep.repos.len() == 0 -> {
+            out = out - '  没有匹配的收录记录。\n'
+            io.out(out)
+            return
+        }
+    }
+    r <- rep.repos: {
+        where = r.host - '/' - r.owner - '/' - r.repo
+        {
+            r.status == 'skipped' -> out = out - '  - ' - where - ' 跳过（' - r.reason - '）\n'
+
+            r.status == 'error' -> out = out - '  ✗ ' - where - ' 失败：' - r.error - '\n'
+
+            -> {
+                mark = '✓'
+                r.status == 'partial' -> mark = '!'
+                pkgs = ''
+                p <- r.packages: {
+                    pkgs.len-bytes() > 0 -> pkgs = pkgs - ', '
+                    pkgs = pkgs - p
+                }
+                out = out - '  ' - mark - ' ' - where - ' ' - r.version - '（' - r.branch - '）'
+                r.versions.len() > 1 -> out = out - '，' - r.versions.len().to-str() - ' 个版本'
+                r.cached > 0 -> out = out - '，跳过 ' - r.cached.to-str() - ' 个已同步版本'
+                out = out - ' 包：' - pkgs - '\n'
+                s <- r.skipped: {
+                    parts = s.split('\t')
+                    out = out - '    - 跳过 ' - arr-str(parts, 1) - '（' - arr-str(parts, 2) - '）：' - arr-str(parts, 3) - '\n'
+                }
+                w <- r.warnings: {
+                    out = out - '    ! ' - w - '\n'
+                }
+            }
+        }
+    }
+    rep.removed.len() > 0 -> {
+        removed = ''
+        rm <- rep.removed: {
+            removed.len-bytes() > 0 -> removed = removed - '、'
+            removed = removed - rm
+        }
+        out = out - '  清理已删除仓库：' - removed - '\n'
+    }
+    rep.latest-count >= 0 -> {
+        changed = '（无变化）'
+        rep.latest-changed -> changed = '（已更新）'
+        out = out - '  latest.noml：' - rep.latest-count.to-str() - ' 条' - changed - '\n'
+    }
+    ok-count = 0
+    r <- rep.repos: {
+        r.status == 'ok' -> ok-count = add-i(ok-count, 1)
+    }
+    out = out - '  结果：' - ok-count.to-str() - ' 成功，' - rep.partial.to-str() - ' 部分，' - rep.errors.to-str() - ' 失败，' - rep.warnings.to-str() - ' 告警\n'
+    io.out(out)
+}
+
+run-sync = (o opts) {
+    rep = report{}
+    fatal = ''
+    rep, fatal = sync(o)
+    fatal.len-bytes() > 0 -> {
+        eprint('\nnohub: ' - fatal)
+        exit(1)
+    }
+    print-report(rep, o)
+    o.strict && rep.ok == false -> exit(1)
+}
+
+probe = () (x i64) {
+    x = 42
+}

@@ -1,0 +1,123 @@
+; nohub sync — Nolang CLI
+;
+; 与 bin/nohub.mjs 等价：
+;   nohub sync [host/owner/repo] [--root <dir>] [--dry-run] [--strict] [--force]
+
+# /sync/core
+
+USAGE = '用法：\n  nohub sync [host/owner/repo] [选项]   同步收录的仓库\n  nohub --help                          显示帮助\n  nohub --version                       显示版本\n\n选项：\n  --root <dir>    实例仓库根目录（缺省：本仓库）\n  --dry-run       只报告，不写盘\n  --strict        有仓库失败或部分成功（有包被跳过）时以非零码退出\n  --force         忽略 state/sync.noml，重新抓取全部版本\n\n说明：\n  位置参数可写 host/owner/repo，也可简写 owner/repo（缺省 github.com）。\n  留空表示全量同步。全量同步会清理已不在收录记录里的仓库快照；\n  版本同步默认增量：state 里记录过的版本直接跳过，失败的最新版本会重试，\n  不产生无意义的文件重写与提交。--force 用于修复被改写的旧 tag。\n\n  参考实现里用 node bin/nohub.mjs sync 调用；工作流直接跑同一入口。\n'
+VERSION = '0.1.0'
+
+USAGE-BODY = USAGE.slice-bytes(0, core.sub-i(USAGE.len-bytes(), 1))
+
+exit-parse = (msg str, usage str) {
+    eprint(msg - '\n\n' - USAGE-BODY)
+    exit(2)
+}
+
+argc = args.count()
+cmd = ''
+argc > 1 -> {
+    cmd-opt = args.get(1)
+    cmd = cmd-opt: {
+        ok -> it
+
+        -> ''
+    }
+}
+
+{
+    argc <= 1 || cmd == '--help' || cmd == '-h' -> {
+        io.out(USAGE)
+    }
+
+    cmd == '--version' || cmd == '-v' -> {
+        io.out('nohub ' - VERSION - '\n')
+    }
+
+    cmd != 'sync' -> {
+        eprint('未知命令：' - cmd - '\n\n' - USAGE-BODY)
+        exit(2)
+    }
+
+    -> {
+        o = core.opts{}
+        cwd = os.get-wd()
+        o.root = cwd
+        o.filter = ''
+        o.dry-run = false
+        o.force = false
+        o.strict = false
+        o.now = ''
+        o.test-root = ''
+        positional []str
+        parse-error = ''
+        i = 2
+        (i < argc) {
+            a = ''
+            av = args.get(i)
+            av: {
+                ok -> a = it
+
+                -> _
+            }
+            {
+                a == '--dry-run' -> o.dry-run = true
+
+                a == '--force' -> o.force = true
+
+                a == '--strict' -> o.strict = true
+
+                a == '--now' -> {
+                    nv = args.get(core.add-i(i, 1))
+                    nv: {
+                        ok -> o.now = it
+
+                        -> parse-error = '--now 缺少时间参数'
+                    }
+                    parse-error.len-bytes() > 0 -> exit-parse(parse-error, USAGE)
+                    i = core.add-i(i, 1)
+                }
+
+                a == '--test-root' -> {
+                    tv = args.get(core.add-i(i, 1))
+                    tv: {
+                        ok -> o.test-root = it
+
+                        -> parse-error = '--test-root 缺少目录参数'
+                    }
+                    parse-error.len-bytes() > 0 -> exit-parse(parse-error, USAGE)
+                    i = core.add-i(i, 1)
+                }
+
+                a == '--root' -> {
+                    nv = args.get(core.add-i(i, 1))
+                    nv: {
+                        ok -> o.root = it
+
+                        -> parse-error = '--root 缺少目录参数'
+                    }
+                    parse-error.len-bytes() > 0 -> exit-parse(parse-error, USAGE)
+                    i = core.add-i(i, 1)
+                }
+
+                a.starts-with('--root=') -> o.root = a.slice-bytes(7, a.len-bytes())
+
+                a.starts-with('--') -> parse-error = '未知选项：' - a
+
+                -> positional.push(a)
+            }
+            parse-error.len-bytes() > 0 -> exit-parse(parse-error, USAGE)
+            i = core.add-i(i, 1)
+        }
+        positional.len() > 1 -> exit-parse('只能有一个位置参数（host/owner/repo）', USAGE)
+        positional.len() == 1 -> {
+            text = arr-str(positional, 0).trim()
+            {
+                text.len-bytes() > 0 -> o.filter = text
+            }
+        }
+
+        core.run-sync(o)
+    }
+}

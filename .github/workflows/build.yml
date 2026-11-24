@@ -1,0 +1,81 @@
+name: Build
+
+# 推送 tag（v*）时构建 Nolang 版 sync 的多平台二进制并发布 Release。
+# 产物命名遵循 no install 约定：<tool>-<os>-<arch>，因此 sync workflow 可以
+# 直接用 `no install sync:v0.1.0@github.com/lizongying/nohub` 安装生成物。
+#
+# 构建由 nolang 官方 build-nolang action 完成：下载自带 LLVM 的 no 编译器、
+# 交叉编译每个目标平台，无需在本机安装 LLVM/opt/llc。
+# sync 包的 nogit 依赖走远程 AST（nogit-ast.zip），构建时由编译器自动下载。
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: 从 tag 注入版本
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME:-dev}"
+          VER="${TAG#v}"
+          echo "注入 VERSION='$VER'（来自 tag '$TAG'）"
+          sed -i "s/^VERSION = '[^']*'$/VERSION = '$VER'/" sync/main.no
+          grep -n '^VERSION' sync/main.no
+
+      - name: 构建 sync 多平台二进制
+        id: build
+        uses: lizongying/nolang/.github/actions/build-nolang@main
+        with:
+          version: 'v0.4.32'
+          entry: sync
+          name: sync
+          targets: >-
+            linux/amd64,
+            linux/arm64,
+            darwin/amd64,
+            darwin/arm64,
+            windows/amd64,
+            windows/arm64
+          cc: zig
+          fail-on-error: 'true'
+          output-dir: dist
+
+      - name: 构建报告
+        if: always()
+        shell: bash
+        env:
+          BINARIES: ${{ steps.build.outputs.binaries }}
+          FAILED: ${{ steps.build.outputs.failed }}
+          NOLANG_VER: ${{ steps.build.outputs.nolang-version }}
+        run: |
+          echo "============================================"
+          echo "  sync Build Report"
+          echo "  Nolang: $NOLANG_VER"
+          echo "============================================"
+          echo "构建成功："; printf '%s\n' "$BINARIES"
+          echo "构建失败："; printf '%s\n' "$FAILED"
+
+      - name: 生成校验和
+        shell: bash
+        run: |
+          cd dist
+          sha256sum sync-* > checksums-sha256.txt
+          cat checksums-sha256.txt
+
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/sync-*
+            dist/checksums-sha256.txt
+          generate_release_notes: true

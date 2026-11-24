@@ -1,0 +1,476 @@
+; nohub sync 的 Nolang 集成测试。
+; 每个用例都用隐藏 --test-root 注入 refs 与仓库文件，模拟 Node 测试中的
+; fake lsRemote / fake fetcher，然后只通过落盘结果与标量报告字段断言。
+
+# std/fs
+# /sync/core
+
+NOW = '2026-11-20T08:00:00.000Z'
+NOW2 = '2026-11-21T08:00:00.000Z'
+SHA_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+SHA_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+SHA_C = 'cccccccccccccccccccccccccccccccccccccccc'
+
+make-refs = () (out str) {
+    out = 'ref: refs/heads/main\tHEAD\n'
+    out = out - SHA_B - '\tHEAD\n'
+    out = out - SHA_B - '\trefs/heads/main\n'
+    out = out - SHA_A - '\trefs/tags/v0.4.27\n'
+    out = out - SHA_B - '\trefs/tags/v0.4.28\n'
+}
+
+make-no-tag-refs = () (out str) {
+    out = 'ref: refs/heads/main\tHEAD\n'
+    out = out - SHA_B - '\tHEAD\n'
+    out = out - SHA_B - '\trefs/heads/main\n'
+}
+
+REFS = make-refs()
+NO_TAG_REFS = make-no-tag-refs()
+make-new-refs = () (out str) {
+    out = 'ref: refs/heads/main\tHEAD\n'
+    out = out - SHA_B - '\tHEAD\n'
+    out = out - SHA_B - '\trefs/heads/main\n'
+    out = out - SHA_A - '\trefs/tags/v0.4.27\n'
+    out = out - SHA_B - '\trefs/tags/v0.4.28\n'
+    out = out - SHA_C - '\trefs/tags/v0.4.29\n'
+}
+NEW_REFS = make-new-refs()
+
+AUTHORS_NOLANG = '[\n  \'nolang\',\n]\n'
+AUTHORS_EMPTY = '[]\n'
+AUTHORS_PAUSED = '[\n  {\n    name: \'nolang\'\n    status: \'paused\'\n  },\n]\n'
+AUTHORS_TWO = '[\n  \'nolang\',\n  \'notools\',\n]\n'
+
+WORKSPACE = '{\n  glossary: \'/glossary\'\n  noui: \'/noui\'\n}\n'
+GLOSSARY = '{\n  name: \'glossary\'\n  version: \'0.1.0\'\n  description: \'Nolang 词条化知识库\'\n  license: \'Apache-2.0\'\n  repository: \'https://github.com/lizongying/nolang\'\n  tag_pattern: \'v{version}\'\n  compiler: { version: \'v0.4.19\' }\n}\n'
+NOUI = '{\n  name: \'noui\'\n  version: \'0.2.0\'\n  description: \'Nolang UI 组件库\'\n  license: \'MIT\'\n  repository: \'https://github.com/lizongying/nolang\'\n}\n'
+BAD_NOUI = '{\n  name: \'other\'\n  version: \'0.2.0\'\n  license: \'MIT\'\n}\n'
+BAD_GLOSSARY = '[]\n'
+VERSION_TAG_GLOSSARY = '{\n  name: \'glossary\'\n  version: \'v0.1.0\'\n  tag_pattern: \'v{version}\'\n  license: \'MIT\'\n}\n'
+NO_VERSION = '{\n  name: \'nojq\'\n  license: \'MIT\'\n  compiler: { version: \'v0.4.27\' }\n}\n'
+NOTOOLS_WORKSPACE = '{\n  nojq: \'/nojq\'\n}\n'
+SOLO_PACKAGE = '{\n  name: \'solo\'\n  version: \'1.0.0\'\n  license: \'MIT\'\n}\n'
+
+PASSED = 0
+FAILED = 0
+
+check = (cond bool, msg str) {
+    {
+        cond -> PASSED = core.add-i(PASSED, 1)
+
+        -> {
+            FAILED = core.add-i(FAILED, 1)
+            print('FAIL: ' - msg)
+        }
+    }
+}
+
+check-int = (got i64, want i64, msg str) {
+    check(got == want, msg)
+}
+
+check-str = (got str, want str, msg str) {
+    check(got.eq-full(want), msg)
+}
+
+put = (base str, rel str, text str) {
+    file = core.join-path(base, rel)
+    core.ensure-dir(core.dir-of(file))
+    fs.write-str(file, text)
+}
+
+read-rel = (root str, rel str) (out str) {
+    text, ok = core.read-text-result(core.join-path(root, rel))
+    {
+        ok -> out = text
+
+        -> out = ''
+    }
+}
+
+has = (root str, rel str, needle str) (yes bool) {
+    yes = read-rel(root, rel).contains(needle)
+}
+
+has-file = (root str, rel str) (yes bool) {
+    yes = fs.exists(core.join-path(root, rel))
+}
+
+make-root = (name str, authors str) (out str) {
+    out = '/tmp/nohub-sync-test-root-' - name
+    core.remove-tree(out)
+    put(out, 'repos/github.com/lizongying.noml', authors)
+}
+
+make-empty-fixture = (name str, refs str) (out str) {
+    out = '/tmp/nohub-sync-test-fix-' - name
+    core.remove-tree(out)
+    put(out, 'refs.txt', refs)
+}
+
+make-fixture = (name str, refs str) (out str) {
+    out = make-empty-fixture(name, refs)
+    put(out, 'files/github.com/lizongying/nolang/workspace.noml', WORKSPACE)
+    put(out, 'files/github.com/lizongying/nolang/glossary/package.noml', GLOSSARY)
+    put(out, 'files/github.com/lizongying/nolang/noui/package.noml', NOUI)
+}
+
+run = (root str, fix str, filter str, dry bool, force bool, now str) (rep core.report, fatal str) {
+    o = core.opts{}
+    o.root = root
+    o.filter = filter
+    o.dry-run = dry
+    o.force = force
+    o.now = now
+    o.test-root = fix
+    rep, fatal = core.sync-result(o)
+}
+
+base-package = (fix str, version str) {
+    put(fix, 'ref-files/' - version - '/github.com/lizongying/nolang/workspace.noml', WORKSPACE)
+    put(fix, 'ref-files/' - version - '/github.com/lizongying/nolang/glossary/package.noml', GLOSSARY)
+    put(fix, 'ref-files/' - version - '/github.com/lizongying/nolang/noui/package.noml', NOUI)
+}
+
+; 1. 全量同步：快照、包级 latest、根 latest、state
+t-full-sync = () {
+    name = 'full'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-str(fatal, '', 'full: fatal empty')
+    check-int(rep.errors, 0, 'full: no errors')
+    check(has-file(root, 'workspaces/github.com/lizongying/nolang/v0.4.28/workspace.noml'), 'full: workspace snapshot')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'), 'full: glossary snapshot')
+    check(has-file(root, 'packages/noui/github.com/lizongying/nolang/v0.4.28/package.noml'), 'full: noui snapshot')
+    check(has(root, 'latest.noml', 'glossary:v0.4.28@github.com/lizongying/nolang'), 'full: root latest glossary')
+    check(has(root, 'latest.noml', 'noui:v0.4.28@github.com/lizongying/nolang'), 'full: root latest noui')
+    check(has(root, 'packages/glossary/github.com/lizongying/nolang/latest.noml', 'version: \'v0.4.28\''), 'full: package latest version')
+    check(has(root, 'state/sync.noml', 'last-sync-status: \'ok\''), 'full: state status')
+    check(has(root, 'state/sync.noml', 'last-sync-at: \'' - NOW - '\''), 'full: state time')
+}
+
+; 2. 每个仓库版本都写快照
+t-all-versions = () {
+    name = 'all-versions'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 0, 'all-versions: no errors')
+    v = 'v0.4.27'
+    check(has-file(root, 'workspaces/github.com/lizongying/nolang/' - v - '/workspace.noml'), 'all-versions: old workspace')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/' - v - '/package.noml'), 'all-versions: old glossary')
+    check(has-file(root, 'packages/noui/github.com/lizongying/nolang/' - v - '/package.noml'), 'all-versions: old noui')
+    check(has(root, 'packages/glossary/github.com/lizongying/nolang/latest.noml', 'v0.4.27'), 'all-versions: latest index old')
+}
+
+; 3. 旧版本没有清单：跳过并告警
+t-old-missing = () {
+    name = 'old-missing'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    core.ensure-dir(core.join-path(fix, 'ref-files/v0.4.27'))
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-str(fatal, '', 'old-missing: fatal empty')
+    check-int(rep.errors, 0, 'old-missing: no errors')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml') == false, 'old-missing: no old snapshot')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'), 'old-missing: latest snapshot')
+    check(has(root, 'state/sync.noml', 'v0.4.27'), 'old-missing: warning in state')
+}
+
+; 4. 最新版本没有清单：整仓失败
+t-latest-missing = () {
+    name = 'latest-missing'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    core.ensure-dir(core.join-path(fix, 'ref-files/v0.4.28'))
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 1, 'latest-missing: one error')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml'), 'latest-missing: old snapshot kept')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml') == false, 'latest-missing: no latest snapshot')
+}
+
+; 5. 幂等：第二次不重写文件和状态
+t-idempotent = () {
+    name = 'idempotent'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix1 = make-fixture(name, REFS)
+    rep1, fatal1 = run(root, fix1, '', false, false, NOW)
+    state-before = read-rel(root, 'state/sync.noml')
+    fix2 = make-empty-fixture(name - '-empty', REFS)
+    rep2, fatal2 = run(root, fix2, '', false, false, NOW2)
+
+    check-int(rep1.errors, 0, 'idempotent: first no errors')
+    check-int(rep2.errors, 0, 'idempotent: second no errors')
+    check(rep2.latest-changed == false, 'idempotent: latest unchanged')
+    check(rep2.state-written == false, 'idempotent: state not written')
+    check-str(read-rel(root, 'state/sync.noml'), state-before, 'idempotent: state bytes unchanged')
+}
+
+; 6. 删除收录记录：清理快照与 latest
+t-prune = () {
+    name = 'prune'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    rep1, fatal1 = run(root, fix, '', false, false, NOW)
+    put(root, 'repos/github.com/lizongying.noml', AUTHORS_EMPTY)
+    rep2, fatal2 = run(root, fix, '', false, false, NOW2)
+
+    check-int(rep1.errors, 0, 'prune: first no errors')
+    check-int(rep2.errors, 0, 'prune: second no errors')
+    check(has-file(root, 'workspaces/github.com/lizongying/nolang') == false, 'prune: workspace removed')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang') == false, 'prune: glossary removed')
+    check(has-file(root, 'packages/noui/github.com/lizongying/nolang') == false, 'prune: noui removed')
+    check-str(read-rel(root, 'latest.noml'), '[]\n', 'prune: latest empty')
+}
+
+; 7. 单个包校验失败：partial，不影响好包
+t-partial = () {
+    name = 'partial'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    put(fix, 'files/github.com/lizongying/nolang/noui/package.noml', BAD_NOUI)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 0, 'partial: no repo error')
+    check-int(rep.partial, 1, 'partial: one partial repo')
+    check(has(root, 'state/sync.noml', 'last-sync-status: \'partial\''), 'partial: state partial')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'), 'partial: good package written')
+    check(has-file(root, 'packages/noui/github.com/lizongying/nolang') == false, 'partial: bad package absent')
+    check(has(root, 'latest.noml', 'glossary:v0.4.28@github.com/lizongying/nolang'), 'partial: good latest')
+    check(has(root, 'latest.noml', 'noui:') == false, 'partial: bad latest absent')
+}
+
+; 8. version 缺省：回落到仓库版本
+t-no-version = () {
+    name = 'no-version'
+    root = make-root(name, '[\n  \'notools\',\n]\n')
+    fix = make-empty-fixture(name, REFS)
+    put(fix, 'files/github.com/lizongying/notools/workspace.noml', NOTOOLS_WORKSPACE)
+    put(fix, 'files/github.com/lizongying/notools/nojq/package.noml', NO_VERSION)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 0, 'no-version: no errors')
+    check(has-file(root, 'packages/nojq/github.com/lizongying/notools/v0.4.28/package.noml'), 'no-version: snapshot')
+    check-str(read-rel(root, 'packages/nojq/github.com/lizongying/notools/v0.4.28/package.noml'), NO_VERSION, 'no-version: raw snapshot')
+    check(has(root, 'latest.noml', 'nojq:v0.4.28@github.com/lizongying/notools'), 'no-version: latest')
+}
+
+; 9. 所有包都不合法：整仓失败
+t-all-invalid = () {
+    name = 'all-invalid'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    put(fix, 'files/github.com/lizongying/nolang/glossary/package.noml', BAD_GLOSSARY)
+    put(fix, 'files/github.com/lizongying/nolang/noui/package.noml', GLOSSARY)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 1, 'all-invalid: one error')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang') == false, 'all-invalid: no glossary')
+    check(has-file(root, 'packages/noui/github.com/lizongying/nolang') == false, 'all-invalid: no noui')
+}
+
+; 10. 单包仓库：workspace 缺失回退根 package.noml
+t-solo = () {
+    name = 'solo'
+    root = make-root(name, '[\n  \'solo\',\n]\n')
+    fix = make-empty-fixture(name, REFS)
+    put(fix, 'files/github.com/lizongying/solo/package.noml', SOLO_PACKAGE)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 0, 'solo: no errors')
+    check(has-file(root, 'packages/solo/github.com/lizongying/solo/v0.4.28/package.noml'), 'solo: snapshot')
+    check(has-file(root, 'workspaces/github.com/lizongying/solo') == false, 'solo: no workspace snapshot')
+    check(has(root, 'latest.noml', 'solo:v0.4.28@github.com/lizongying/solo'), 'solo: latest')
+}
+
+; 11. paused 仓库被跳过
+t-paused = () {
+    name = 'paused'
+    root = make-root(name, AUTHORS_PAUSED)
+    fix = make-fixture(name, REFS)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 0, 'paused: no errors')
+    check(has-file(root, 'packages') == false, 'paused: no packages dir')
+}
+
+; 12. filter：只处理指定仓库，不清理其它仓库
+t-filter = () {
+    name = 'filter'
+    root = make-root(name, AUTHORS_TWO)
+    fix = make-fixture(name, REFS)
+    put(fix, 'files/github.com/lizongying/notools/workspace.noml', '{ notool: \'/notool\' }\n')
+    put(fix, 'files/github.com/lizongying/notools/notool/package.noml', '{\n  name: \'notool\'\n  version: \'0.1.0\'\n  license: \'MIT\'\n}\n')
+
+    rep1, fatal1 = run(root, fix, '', false, false, NOW)
+    check(has-file(root, 'packages/notool/github.com/lizongying/notools/v0.4.28/package.noml'), 'filter: first run wrote notool')
+
+    put(root, 'repos/github.com/lizongying.noml', AUTHORS_NOLANG)
+    rep2, fatal2 = run(root, fix, 'github.com/lizongying/nolang', false, false, NOW2)
+    check-int(rep2.errors, 0, 'filter: no errors')
+    check(has-file(root, 'packages/notool/github.com/lizongying/notools/v0.4.28/package.noml'), 'filter: notool retained')
+    check(has(root, 'latest.noml', 'notool:v0.4.28@github.com/lizongying/notools'), 'filter: notool latest retained')
+}
+
+; 13. tag 无法解析：告警但不阻断
+t-tag-warning = () {
+    name = 'tag-warning'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    put(fix, 'files/github.com/lizongying/nolang/glossary/package.noml', VERSION_TAG_GLOSSARY)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 0, 'tag-warning: no errors')
+    check(has(root, 'state/sync.noml', 'vv0.1.0'), 'tag-warning: warning in state')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'), 'tag-warning: snapshot still written')
+}
+
+; 14. dry-run：不写任何文件
+t-dry-run = () {
+    name = 'dry-run'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, REFS)
+    rep, fatal = run(root, fix, '', true, false, NOW)
+
+    check-int(rep.errors, 0, 'dry-run: no errors')
+    check(rep.latest-changed, 'dry-run: latest reported changed')
+    check(has-file(root, 'packages') == false, 'dry-run: no packages')
+    check(has-file(root, 'workspaces') == false, 'dry-run: no workspaces')
+    check(has-file(root, 'latest.noml') == false, 'dry-run: no latest')
+    check(has-file(root, 'state') == false, 'dry-run: no state')
+}
+
+; 15. 无 tag：退化为分支 HEAD 短 SHA
+t-no-tag = () {
+    name = 'no-tag'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix = make-fixture(name, NO_TAG_REFS)
+    rep, fatal = run(root, fix, '', false, false, NOW)
+
+    check-int(rep.errors, 0, 'no-tag: no errors')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/bbbbbbb/package.noml'), 'no-tag: short sha snapshot')
+    check(has(root, 'state/sync.noml', 'repo-version: \'bbbbbbb\''), 'no-tag: state short sha')
+}
+
+; 16. 增量：已同步版本不再抓取
+t-incremental-cached = () {
+    name = 'incremental-cached'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix1 = make-fixture(name, REFS)
+    rep1, fatal1 = run(root, fix1, '', false, false, NOW)
+    state-before = read-rel(root, 'state/sync.noml')
+    fix2 = make-empty-fixture(name - '-empty', REFS)
+    rep2, fatal2 = run(root, fix2, '', false, false, NOW2)
+
+    check-int(rep1.errors, 0, 'cached: first no errors')
+    check(rep1.state-written, 'cached: first state written')
+    check-int(rep2.errors, 0, 'cached: second no errors')
+    check(rep2.state-written == false, 'cached: second state not written')
+    check-str(read-rel(root, 'state/sync.noml'), state-before, 'cached: state bytes unchanged')
+}
+
+; 17. 增量：新增 tag 只抓新版本
+t-incremental-new = () {
+    name = 'incremental-new'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix1 = make-fixture(name, REFS)
+    rep1, fatal1 = run(root, fix1, '', false, false, NOW)
+
+    fix2 = make-empty-fixture(name - '-new', NEW_REFS)
+    base-package(fix2, 'v0.4.29')
+    rep2, fatal2 = run(root, fix2, '', false, false, NOW2)
+
+    check-int(rep1.errors, 0, 'new-tag: first no errors')
+    check-int(rep2.errors, 0, 'new-tag: second no errors')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.27/package.noml'), 'new-tag: old snapshot kept')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.29/package.noml'), 'new-tag: new snapshot')
+    check(has(root, 'state/sync.noml', 'v0.4.29'), 'new-tag: state has new version')
+    check(has(root, 'packages/glossary/github.com/lizongying/nolang/latest.noml', 'version: \'v0.4.29\''), 'new-tag: package latest')
+    check(has(root, 'latest.noml', 'glossary:v0.4.29@github.com/lizongying/nolang'), 'new-tag: root latest')
+}
+
+; 18. 增量：上次失败的最新版本会重试
+t-retry-latest = () {
+    name = 'retry-latest'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix1 = make-fixture(name, REFS)
+    core.ensure-dir(core.join-path(fix1, 'ref-files/v0.4.28'))
+    rep1, fatal1 = run(root, fix1, '', false, false, NOW)
+    check-int(rep1.errors, 1, 'retry: first has error')
+
+    fix2 = make-fixture(name - '-retry', REFS)
+    rep2, fatal2 = run(root, fix2, '', false, false, NOW2)
+    check-int(rep2.errors, 0, 'retry: second no errors')
+    check(has(root, 'state/sync.noml', 'last-sync-status: \'ok\''), 'retry: state ok')
+    check(has-file(root, 'packages/glossary/github.com/lizongying/nolang/v0.4.28/package.noml'), 'retry: latest snapshot')
+}
+
+; 19. force：忽略 state，重新抓取全部版本
+t-force = () {
+    name = 'force'
+    root = make-root(name, AUTHORS_NOLANG)
+    fix1 = make-fixture(name, REFS)
+    rep1, fatal1 = run(root, fix1, '', false, false, NOW)
+
+    fix2 = make-empty-fixture(name - '-force', REFS)
+    base-package(fix2, 'v0.4.27')
+    base-package(fix2, 'v0.4.28')
+    rep2, fatal2 = run(root, fix2, '', false, true, NOW2)
+
+    check-int(rep1.errors, 0, 'force: first no errors')
+    check-int(rep2.errors, 0, 'force: second no errors')
+    check(rep2.state-written, 'force: state written')
+    check(has(root, 'state/sync.noml', 'last-sync-at: \'' - NOW2 - '\''), 'force: state time updated')
+}
+
+print('RUN nohub.sync.fixture')
+print('CASE full')
+t-full-sync()
+print('CASE all-versions')
+t-all-versions()
+print('CASE old-missing')
+t-old-missing()
+print('CASE latest-missing')
+t-latest-missing()
+print('CASE idempotent')
+t-idempotent()
+print('CASE prune')
+t-prune()
+print('CASE partial')
+t-partial()
+print('CASE no-version')
+t-no-version()
+print('CASE all-invalid')
+t-all-invalid()
+print('CASE solo')
+t-solo()
+print('CASE paused')
+t-paused()
+print('CASE filter')
+t-filter()
+print('CASE tag-warning')
+t-tag-warning()
+print('CASE dry-run')
+t-dry-run()
+print('CASE no-tag')
+t-no-tag()
+print('CASE incremental-cached')
+t-incremental-cached()
+print('CASE incremental-new')
+t-incremental-new()
+print('CASE retry-latest')
+t-retry-latest()
+print('CASE force')
+t-force()
+print('PASS=' - PASSED.to-str() - ' FAIL=' - FAILED.to-str())
+{
+    FAILED > 0 -> exit(1)
+
+    -> exit(0)
+}

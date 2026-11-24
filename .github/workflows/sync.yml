@@ -1,7 +1,9 @@
 name: sync
 
 # nohub 同步工作流：作者记录（repos/**）变更后即时触发，每日定时兜底。
-# 同步程序 `node bin/nohub.mjs sync` 拉取上游仓库的 workspace.noml / package.noml，
+# 同步程序为 Nolang 版 sync（由 build.yml 在 tag 推送时构建并发布），
+# 这里用 `no install sync:<version>@github.com/lizongying/nohub` 安装该生成物后运行，
+# 拉取上游仓库的 workspace.noml / package.noml，
 # 按全部语义化 tag 写入 workspaces/ packages/ 版本快照、根目录 latest.noml 与 state/sync.noml，
 # 再重建 web/data.js 与 web/index.noml，一并提交回仓库；
 # 同步默认是增量的：state 里记录过的版本直接跳过，只抓新增 tag（上次失败的最新版本会重试），
@@ -28,6 +30,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # 与 build.yml 发布的 tag 对应；升级时同时改这里和 build.yml 的构建版本。
+  SYNC_VERSION: v0.1.0
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -39,10 +45,22 @@ jobs:
           node-version: 24
           package-manager-cache: false # Disable automatic npm caching if not required
 
+      # 安装编译器（no install 依赖 no 命令），再从本项目 Release 安装 Nolang 版 sync。
+      - name: 安装 Nolang 编译器
+        uses: lizongying/nolang/.github/actions/setup-nolang@main
+        with:
+          version: 'v0.4.32'
+
+      - name: 安装 sync 生成物
+        run: |
+          no install "sync:${SYNC_VERSION}@github.com/lizongying/nohub"
+
       - name: 同步清单
         env:
           FORCE: ${{ inputs.force && '--force' || '' }}
-        run: node bin/nohub.mjs sync ${{ inputs.repo }} --strict $FORCE
+        # 直接调用 ~/no/bin 下的安装物，避免 /usr/local/bin 软链因权限失败时找不到命令。
+        run: |
+          "$HOME/no/bin/sync" sync ${{ inputs.repo }} --strict $FORCE
 
       - name: 重建索引
         run: node web/build.mjs

@@ -1,0 +1,59 @@
+; NOML 节点深复制回归测试。
+; 曾经因为 num-opt/n/len 同名导致 i64 长度被 f64 变量污染，
+; 旧 state 对象被复制成空对象；这里锁住该行为。
+
+# std/noml
+# /sync/core
+
+PASSED = 0
+FAILED = 0
+
+check = (cond bool, msg str) {
+    {
+        cond -> PASSED = core.add-i(PASSED, 1)
+
+        -> {
+            FAILED = core.add-i(FAILED, 1)
+            print('FAIL: ' - msg)
+        }
+    }
+}
+
+check-str = (got str, want str, msg str) {
+    check(got.eq-full(want), msg)
+}
+
+t-copy-node = () {
+    text = '{\n  a: {\n    x: \'y\'\n    z: [1, 2]\n  }\n}\n'
+    r = noml.parse(text)
+    r: {
+        ok -> {
+            src = it.node-pool
+            dst = noml.new()
+            root = dst.new-obj()
+            dst.set-root(root)
+            child = src.get(it.root, 'a')
+            child: {
+                ok -> {
+                    copied = core.copy-node(src, dst, it)
+                    dst.put(root, 'a', copied)
+                    expected = '{\n  a: {\n    x: \'y\'\n    z: [\n      1,\n      2,\n    ]\n  }\n}'
+                    check-str(dst.stringify(), expected, 'copy-node preserves nested object and array')
+                }
+
+                -> check(false, 'copy-node child lookup')
+            }
+        }
+
+        -> check(false, 'copy-node parse')
+    }
+}
+
+print('RUN sync.copy-node')
+t-copy-node()
+print('PASS=' - PASSED.to-str() - ' FAIL=' - FAILED.to-str())
+{
+    FAILED > 0 -> exit(1)
+
+    -> exit(0)
+}

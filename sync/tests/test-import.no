@@ -1,0 +1,35 @@
+; 冒烟测试：确认 # nogit/src/remote 从 nogit-ast.zip（v0.1.38 起发布）
+; 正确取回模块，且包含 parse-ls-remote。
+
+# nogit/src/remote
+# /sync/core
+
+PASSED = 0
+FAILED = 0
+
+check = (cond bool, msg str) {
+    {
+        cond -> PASSED = core.add-i(PASSED, 1)
+
+        -> {
+            FAILED = core.add-i(FAILED, 1)
+            print('FAIL: ' - msg)
+        }
+    }
+}
+
+text = 'ref: refs/heads/main\tHEAD\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/heads/main\n'
+names, shas, count, branch, ok = remote.parse-ls-remote(text)
+
+print('RUN sync.remote-import')
+check(ok, 'parse-ls-remote ok')
+check(branch.eq-full('main'), 'default branch main')
+check(count == 1, 'one ref parsed')
+check(names.contains('refs/heads/main'), 'ref name parsed')
+check(shas.contains('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'), 'sha parsed')
+print('PASS=' - PASSED.to-str() - ' FAIL=' - FAILED.to-str())
+{
+    FAILED > 0 -> exit(1)
+
+    -> exit(0)
+}

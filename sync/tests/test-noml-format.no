@@ -1,0 +1,35 @@
+; 校验 std/noml.stringify 与 Node lib/noml.mjs 的格式化一致性。
+
+# std/noml
+# /sync/core
+
+PASSED = 0
+FAILED = 0
+
+check = (cond bool, msg str) {
+    {
+        cond -> PASSED = core.add-i(PASSED, 1)
+
+        -> {
+            FAILED = core.add-i(FAILED, 1)
+            print('FAIL: ' - msg)
+        }
+    }
+}
+
+s = '{\n  \'github.com/lizongying/nolang\': {\n    \'last-sync-at\': \'2026-11-20T08:00:00.000Z\'\n    \'last-sync-status\': \'ok\'\n    versions: [\'v0.4.27\', \'v0.4.28\']\n    skipped: []\n  }\n}\n'
+want = '{\n  \'github.com/lizongying/nolang\': {\n    last-sync-at: \'2026-11-20T08:00:00.000Z\'\n    last-sync-status: \'ok\'\n    versions: [\n      \'v0.4.27\',\n      \'v0.4.28\',\n    ]\n    skipped: []\n  }\n}'
+
+print('RUN sync.noml-format')
+r = noml.parse(s)
+r: {
+    ok -> check(it.stringify().eq-full(want), 'stringify matches node format')
+
+    -> check(false, 'parse test doc')
+}
+print('PASS=' - PASSED.to-str() - ' FAIL=' - FAILED.to-str())
+{
+    FAILED > 0 -> exit(1)
+
+    -> exit(0)
+}
