@@ -1,0 +1,11 @@
+{
+  name: 'validate'
+  version: '0.1.0'
+  description: 'nohub repos 作者记录的 PR 准入校验器'
+  license: 'MIT'
+  compiler: {
+    version: 'v0.4.32'
+    link-libs: []
+  }
+  output: '/dist'
+}
