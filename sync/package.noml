@@ -8,7 +8,7 @@
   ; notools release 的 nogit-ast.zip 取回模块（见 core.no 的 # nogit/...）。
   dependencies: ['nogit:v0.1.38@github.com/lizongying/notools']
   compiler: {
-    version: 'v0.4.32'
+    version: 'v0.4.37'
     link-libs: []
   }
   output: '/dist'

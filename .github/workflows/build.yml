@@ -1,8 +1,10 @@
 name: Build
 
 # 推送 tag（v*）时构建 Nolang 版 sync 的多平台二进制并发布 Release。
-# 产物命名遵循 no install 约定：<tool>-<os>-<arch>，因此 sync workflow 可以
-# 直接用 `no install sync:v0.1.0@github.com/lizongying/nohub` 安装生成物。
+# 产物命名遵循 no install 约定：<tool>-<os>-<arch>-<version>（与 nolang 编译器
+# release 的 no-linux-amd64-v0.4.32 / no-llvm-linux-amd64-v0.4.32 同形），
+# 因此外部可用 `no install sync:v0.1.0@github.com/lizongying/nohub` 安装生成物。
+# build-nolang action 本身输出不带版本，本 workflow 在 upload 前统一补齐 -v<tag>。
 #
 # 构建由 nolang 官方 build-nolang action 完成：下载自带 LLVM 的 no 编译器、
 # 交叉编译每个目标平台，无需在本机安装 LLVM/opt/llc。
@@ -36,7 +38,7 @@ jobs:
         id: build
         uses: lizongying/nolang/.github/actions/build-nolang@main
         with:
-          version: 'v0.4.32'
+          version: 'v0.4.37'
           entry: sync
           name: sync
           targets: >-
@@ -49,6 +51,28 @@ jobs:
           cc: zig
           fail-on-error: 'true'
           output-dir: dist
+
+      # build-nolang 只产出 <name>-<os>-<arch>[.exe]，补上 -v<tag> 才符合
+      # no install 的 ReleaseAssetName（<tool>-<os>-<arch>-<version>）。
+      # Windows 的 .exe / .pdb 扩展名保持在最后。
+      - name: 资产名补版本后缀
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          V="${TAG#v}"
+          echo "补版本后缀：-v${V}"
+          cd dist
+          for f in sync-*; do
+            [ -e "$f" ] || continue
+            case "$f" in
+              *.exe) mv -f "$f" "${f%.exe}-v${V}.exe" ;;
+              *.pdb) mv -f "$f" "${f%.pdb}-v${V}.pdb" ;;
+              *)     mv -f "$f" "${f}-v${V}" ;;
+            esac
+          done
+          ls -1
 
       - name: 构建报告
         if: always()

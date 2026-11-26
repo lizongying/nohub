@@ -98,16 +98,11 @@ nohub 复用 Nolang 工具链（`no`）的 noml 格式，仓库里的 `workspace
 ```noml
 {
   name: 'glossary'
-  version: 'v0.1.0'
   description: 'Nolang 词条化知识库…'
   keywords: ['nolang', 'glossary', 'mcp', 'knowledge-base']
   repository: 'https://github.com/lizongying/nolang'
   license: 'Apache-2.0'
-
-  ; ── nohub 扩展（no 忽略）──
   category: 'knowledge-base'
-  docs: ''
-  tag_pattern: 'v{version}'
   publish: true
 
   ; ── no 编译选项 ──

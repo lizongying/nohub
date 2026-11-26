@@ -23,10 +23,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 安装 Nolang 编译器
-        uses: lizongying/nolang/.github/actions/setup-nolang@main
+      - name: 构建校验器
+        uses: lizongying/nolang/.github/actions/build-nolang@main
         with:
-          version: 'v0.4.32'
+          # v0.4.36+ 才有新格式资产（no-llvm-linux-amd64-vX.Y.Z）。
+          version: 'v0.4.37'
+          entry: validate/main.no
+          name: nohub-validate
+          targets: linux/amd64
+          cc: zig
+          fail-on-error: 'true'
+          output-dir: dist
 
       # 取本次 PR 相对 base 改动的作者记录文件（相对仓库根，逗号分隔）。
       # 只看 Added/Modified；删除的文件无需校验存在性。
@@ -42,9 +49,6 @@ jobs:
           echo "files=$files" >> "$GITHUB_OUTPUT"
           echo "changed repos files: $files"
 
-      - name: 构建校验器
-        run: no build -o "$RUNNER_TEMP/nohub-validate" validate/main.no
-
       - name: 运行准入校验
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -55,4 +59,4 @@ jobs:
             echo "没有需要校验的作者记录文件"
             exit 0
           fi
-          "$RUNNER_TEMP/nohub-validate" "$PR_AUTHOR" "$CHANGED_FILES" "$GITHUB_WORKSPACE"
+          ./dist/nohub-validate-linux-amd64 "$PR_AUTHOR" "$CHANGED_FILES" "$GITHUB_WORKSPACE"

@@ -1,8 +1,9 @@
 name: sync
 
 # nohub 同步工作流：作者记录（repos/**）变更后即时触发，每日定时兜底。
-# 同步程序为 Nolang 版 sync（由 build.yml 在 tag 推送时构建并发布），
-# 这里用 `no install sync:<version>@github.com/lizongying/nohub` 安装该生成物后运行，
+# 同步程序为 Nolang 版 sync（源码在 sync/），这里用 build-nolang 从当前源码直接
+# 构建 linux/amd64 二进制后运行，不依赖 build.yml 的 Release 生成物——
+# 这样 repos/** 一变更就能同步，无需等 tag 发布，也不会跑过期的旧版本。
 # 拉取上游仓库的 workspace.noml / package.noml，
 # 按全部语义化 tag 生成 workspaces/ packages/ 版本快照、根目录 latest.noml 与 state/sync.noml，
 # 再重建 web/index.noml；产物（含增量状态 state/sync.noml）只发布到 gh-pages，不回写 main。
@@ -29,10 +30,6 @@ on:
 permissions:
   contents: write
 
-env:
-  # 与 build.yml 发布的 tag 对应；升级时同时改这里和 build.yml 的构建版本。
-  SYNC_VERSION: v0.1.0
-
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -44,15 +41,20 @@ jobs:
           node-version: 24
           package-manager-cache: false # Disable automatic npm caching if not required
 
-      # 安装编译器（no install 依赖 no 命令），再从本项目 Release 安装 Nolang 版 sync。
-      - name: 安装 Nolang 编译器
-        uses: lizongying/nolang/.github/actions/setup-nolang@main
+      # 从源码构建同步程序：build-nolang 自带编译器下载 + std 源，不再需要
+      # setup-nolang + no install 两步（后者依赖已发布 Release，会跑旧版本）。
+      # v0.4.36+ 才有新格式资产（no-llvm-linux-amd64-vX.Y.Z）。
+      - name: 构建 Nolang 版 sync
+        id: build
+        uses: lizongying/nolang/.github/actions/build-nolang@main
         with:
-          version: 'v0.4.32'
-
-      - name: 安装 sync 生成物
-        run: |
-          no install "sync:${SYNC_VERSION}@github.com/lizongying/nohub"
+          version: 'v0.4.37'
+          entry: sync
+          name: sync
+          targets: linux/amd64
+          cc: zig
+          fail-on-error: 'true'
+          output-dir: dist
 
       # 增量同步的 state 持久化在 gh-pages（main 不跟踪产物）。同步前取回，
       # 让本次运行能从上次记录的版本继续，而不是每次都退化成全量抓取。
@@ -68,9 +70,10 @@ jobs:
       - name: 同步清单
         env:
           FORCE: ${{ inputs.force && '--force' || '' }}
-        # 直接调用 ~/no/bin 下的安装物，避免 /usr/local/bin 软链因权限失败时找不到命令。
+        # 调用 build-nolang 产出的二进制（dist/sync-linux-amd64，未带版本后缀），
+        # 与 build.yml 发布的资产区分：这里只为当前工作流构建运行，不发布。
         run: |
-          "$HOME/no/bin/sync" sync ${{ inputs.repo }} --strict $FORCE
+          ./dist/sync-linux-amd64 sync ${{ inputs.repo }} --strict $FORCE
 
       - name: 重建索引
         run: node web/build.mjs
